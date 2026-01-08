@@ -41,6 +41,7 @@ class Page:
         self._xml = xml
         self.filename = filename
         self._name = page_name
+        self._background = None
         self.page_id = page_id
         self.rel_id = rel_id
         self.master_unique_id = None
@@ -83,6 +84,23 @@ class Page:
         self.vis.pages_xml.find(f'{namespace}Page[{self.index_num + 1}]').attrib['Name'] = str(value)
         self.vis.pages_xml.find(f'{namespace}Page[{self.index_num + 1}]').attrib['NameU'] = str(value)
         self._name = str(value)
+
+    @property
+    def background(self):
+        if self._background is not None:
+            return self._background
+        bg = self.vis.pages_xml.find(f'{namespace}Page[{self.index_num + 1}]').attrib.get('Background', "0") != "0"
+        self._background = bg
+        return self._background
+
+    @background.setter
+    def background(self, value):
+        value = bool(value)
+        if value:
+            self.vis.pages_xml.find(f'{namespace}Page[{self.index_num + 1}]').attrib['Background'] = "1"
+        else:
+            self.vis.pages_xml.find(f'{namespace}Page[{self.index_num + 1}]').attrib['Background'] = "0"
+        self._background = value
 
     @property
     @deprecation.deprecated(deprecated_in="v0.5.0", removed_in="1.0.0", current_version=vsdx.__version__,
