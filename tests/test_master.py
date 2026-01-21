@@ -257,10 +257,10 @@ def test_master_inheritance_master_shape_set_text(filename: str, master_shape_se
 @pytest.mark.parametrize(
     "filename, shape_id, expected_text",
     [
-        ("test_master_multiple_child_shapes.vsdx", '3', 'AWS Step Functions workflow \n'),
-        ("test_master.vsdx", '4', 'Master Shape A\n'),
-        ("test_master.vsdx", '10', 'Master Shape B\n'),
-        ("test_master.vsdx", '11', 'Master B with updated text\n'),
+        ("test_master_multiple_child_shapes.vsdx", '3', 'AWS Step Functions workflow '),
+        ("test_master.vsdx", '4', 'Master Shape A'),
+        ("test_master.vsdx", '10', 'Master Shape B'),
+        ("test_master.vsdx", '11', 'Master B with updated text'),
     ])
 def test_get_text_from_master_shape(filename: str, shape_id: str, expected_text: str):
     with VisioFile(os.path.join(basedir, filename)) as vis:

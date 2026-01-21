@@ -3,6 +3,7 @@ from __future__ import annotations
 import xml.etree.ElementTree as ET
 from xml.etree.ElementTree import Element
 import re
+import html
 
 from typing import Dict
 from typing import List
@@ -26,6 +27,12 @@ def to_float(val: str):
     except ValueError:
         return 0.0
 
+master_re = re.compile(
+    r"^(?P<prefix>(?:<ns0:[cp].+?\/>)*)"
+    r"(?P<content>.*?)"
+    r"(?P<suffix>(?:<ns0:[cp].+?\/>)*\n*)$",
+    re.DOTALL
+)
 
 class Cell:
     """Represents a Cell element in a vsdx xml file"""
@@ -652,34 +659,49 @@ class Shape:
                     if v is not None:
                         c.value = v
 
-    @staticmethod
-    def clear_all_text_from_xml(x: Element):
-        x.text = ''
-        x.tail = ''
-        for i in x:
-            Shape.clear_all_text_from_xml(i)
-
     @property
-    def text(self):
+    def text_raw(self):
         # return contents of Text element, or Master shape (if referenced), or empty string
         text_element = self.xml.find(f"{namespace}Text")
 
         if isinstance(text_element, Element):
-            return "".join(text_element.itertext())  # get all text from <Text> sub elements
+            return (
+                (text_element.text or "") +
+                "".join(html.unescape(ET.tostring(e, encoding="unicode")) for e in text_element)
+            )
         elif self.master_page_ID and self.master_shape and self.master_shape.text:
             return self.master_shape.text  # get text from master shape
         return ""
 
+    @property
+    def _text_master_tag_groupdict(self):
+        return master_re.match(self.text_raw).groupdict()
+
+    @property
+    def _text_master_tag_pre(self) -> str:
+        return self._text_master_tag_groupdict["prefix"]
+
+    @property
+    def _text_master_tag_post(self) -> str:
+        return self._text_master_tag_groupdict["suffix"]
+
+    @property
+    def text(self):
+        return self._text_master_tag_groupdict["content"]
+
     @text.setter
     def text(self, value):
+        _value = self._text_master_tag_pre + value + self._text_master_tag_post
         tag = f"{namespace}Text"
         text_element = self.xml.find(tag)
-        if isinstance(text_element, Element):  # if there is a Text element then clear out and set contents
-            Shape.clear_all_text_from_xml(text_element)
-        else:
+        if not isinstance(text_element, Element):  # create Text element if not found
             text_element = Element(tag)
             self.xml.append(text_element)
-        text_element.text = value
+        wrapper = ET.fromstring(f"<wrapper>{_value}</wrapper>")
+        text_element.clear()
+        text_element.text = wrapper.text
+        for child in wrapper:
+            text_element.append(child)
 
     @deprecation.deprecated(deprecated_in="0.5.0", removed_in="1.0.0", current_version=vsdx.__version__,
                             details="Use Shape.child_shapes property to access shapes within a shape")

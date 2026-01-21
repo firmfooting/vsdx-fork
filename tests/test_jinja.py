@@ -152,10 +152,10 @@ def test_jinja_loop_showif(filename: str, out_name: str,  context: dict):
 
 @pytest.mark.parametrize(
     ("filename", "context", "shape_id", "expected_x", "expected_text"),
-    [("test_jinja_self_refs.vsdx", {"n": 1}, "1", 2.0, "This text should remain  and x should be 2.0\n"),
-     ("test_jinja_self_refs.vsdx", {"n": 2}, "2", 4.0, "This shape sets x to n * 2\n"),
-     ("test_jinja_self_refs.vsdx", {"n": 1}, "3", 1.0, "This shape sets x to 1 if n else 2\n"),
-     ("test_jinja_self_refs.vsdx", {"n": 0}, "3", 2.0, "This shape sets x to 1 if n else 2\n"),
+    [("test_jinja_self_refs.vsdx", {"n": 1}, "1", 2.0, "This text should remain  and x should be 2.0"),
+     ("test_jinja_self_refs.vsdx", {"n": 2}, "2", 4.0, "This shape sets x to n * 2"),
+     ("test_jinja_self_refs.vsdx", {"n": 1}, "3", 1.0, "This shape sets x to 1 if n else 2"),
+     ("test_jinja_self_refs.vsdx", {"n": 0}, "3", 2.0, "This shape sets x to 1 if n else 2"),
      ])
 def test_jinja_self_refs(filename: str, context: dict, shape_id, expected_x, expected_text):
     out_file = os.path.join(basedir, 'out', f'{filename[:-5]}_test_jinja_self_refs.vsdx')
@@ -180,9 +180,9 @@ def test_jinja_self_refs(filename: str, context: dict, shape_id, expected_x, exp
 
 @pytest.mark.parametrize(
     ("filename", "context", "shape_id", "expected_y", "expected_text"),
-    [("test_jinja_self_refs.vsdx", {"n": 2}, "4", 10.12368731806121, "This shape should move down by 1.0\n"),
-     ("test_jinja_self_refs.vsdx", {"n": 1}, "5", 8.726049539918966, "This shape should move down by n\n"),
-     ("test_jinja_self_refs.vsdx", {"n": 2}, "5", 7.726049539918966, "This shape should move down by n\n"),
+    [("test_jinja_self_refs.vsdx", {"n": 2}, "4", 10.12368731806121, "This shape should move down by 1.0"),
+     ("test_jinja_self_refs.vsdx", {"n": 1}, "5", 8.726049539918966, "This shape should move down by n"),
+     ("test_jinja_self_refs.vsdx", {"n": 2}, "5", 7.726049539918966, "This shape should move down by n"),
      ])
 def test_jinja_self_ref_calculations(filename: str, context: dict, shape_id, expected_y, expected_text):
     out_file = os.path.join(basedir, 'out', f'{filename[:-5]}_test_jinja_self_ref_calcs.vsdx')
