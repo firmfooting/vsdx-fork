@@ -181,7 +181,7 @@ class VisioFile:
 
             new_page = Page(file_to_xml(page_path, self.zip_file_contents), page_path, page_name, page_id, rel_id, self)
             # look for visio/pages/_rels/page3.xml.rels
-            base_page_file_name = page_path.split('/')[-1]
+            base_page_file_name = page_path.split(os.path.sep)[-1]
             page_rels_path = rel_dir+base_page_file_name+'.rels'
 
             if page_rels_path in self.zip_file_contents:
