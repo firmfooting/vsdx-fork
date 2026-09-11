@@ -437,12 +437,7 @@ def test_add_multiple_connectors(filename: str):
 @pytest.mark.parametrize(("filename", "page_index", "shape_a_label", "shape_a_value", "shape_b_label", "shape_b_value"),
                          [
                              ('test1.vsdx', 0, "Network Name", "Box01", "Network Name", "Box02"),
-                             pytest.param('test3_house.vsdx', 0, "Network Name", "House01", "Network Name", "Box01",
-                                          marks=pytest.mark.xfail(
-                                              reason='documents with their own masters but no connector master hit '
-                                                     'the upstream "has masters" branch, which copies from the closed '
-                                                     'media dir. Master-import slice pending.',
-                                              strict=True)),
+                             ('test3_house.vsdx', 0, "Network Name", "House01", "Network Name", "Box01"),
                              ('test4_connectors.vsdx', 2, "Network Name", "Box01", "Network Name", "Box02"),
                              ('test4_connectors.vsdx', 2, "Network Name", "Box01", "Network Name", "Router01"),
                              ('test4_connectors.vsdx', 2, "Network Name", "Switch01", "Network Name", "Router01"),

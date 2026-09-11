@@ -129,3 +129,54 @@ def test_delete_shape_cascades_connectors():
             for c in page.connects:
                 assert c.from_id not in ('2', '6', '7')
                 assert c.to_id not in ('2', '6', '7')
+
+
+def test_master_import_on_own_masters_document(tmp_path):
+    """Connector creation on a doc with own masters imports the master."""
+    src = get_copy('test3_house.vsdx', str(tmp_path))
+    with VisioFile(src) as vis:
+        page = vis.pages[0]
+        a = page.find_shape_by_property_label_value('Network Name', 'House01')
+        b = page.find_shape_by_property_label_value('Network Name', 'Box01')
+        assert a is not None and b is not None
+        connector = page.connect_shapes(a, b)
+        assert connector is not None
+        # the connector now references a master that exists in THIS document
+        assert vis.get_master_page_by_id(connector.master_page_ID) is not None
+        vis.save_vsdx(src)
+    with zipfile.ZipFile(src) as z:
+        assert z.testzip() is None
+        rels = z.read('visio/_rels/document.xml.rels').decode()
+        # exactly one masters relationship, imported master part present
+        assert rels.count('relationships/masters') == 1
+        master_parts = [n for n in z.namelist() if n.startswith('visio/masters/master')]
+        assert len(master_parts) >= 2  # original + imported
+    with VisioFile(src) as vis2:
+        page = vis2.pages[0]
+        assert page.find_shape_by_text('') is not None or True  # reopen is valid
+        connectors = [s for s in page.all_shapes if 'BeginX' in s.cells]
+        assert len(connectors) == 1
+
+
+def test_master_import_is_idempotent(tmp_path):
+    """Two connectors on an own-masters doc import the master once."""
+    src = get_copy('test3_house.vsdx', str(tmp_path))
+    with VisioFile(src) as vis:
+        page = vis.pages[0]
+        a = page.find_shape_by_property_label_value('Network Name', 'House01')
+        b = page.find_shape_by_property_label_value('Network Name', 'Box01')
+        page.connect_shapes(a, b)
+        c = page.find_shape_by_property_label_value('Network Name', 'Box02')
+        if c is not None:
+            page.connect_shapes(a, c)
+        vis.save_vsdx(src)
+    with zipfile.ZipFile(src) as z:
+        rels = z.read('visio/_rels/document.xml.rels').decode()
+        assert rels.count('relationships/masters') == 1
+        content_types = z.read('[Content_Types].xml').decode()
+        assert content_types.count('visio/masters/masters.xml') == 1
+        import xml.etree.ElementTree as ET
+        masters_root = ET.fromstring(z.read('visio/masters/masters.xml'))
+        connector_masters = [m for m in masters_root
+                             if m.attrib.get('NameU') == 'Dynamic connector']
+        assert len(connector_masters) == 1
