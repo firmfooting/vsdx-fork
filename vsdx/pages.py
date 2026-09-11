@@ -48,9 +48,11 @@ class Page:
 
     """
 
-    xml: ET.ElementTree
+    xml: ET.ElementTree[ET.Element]
 
-    def __init__(self, xml: ET.ElementTree, filename: str, page_name: str, page_id: str, rel_id: str, vis: VisioFile):
+    def __init__(
+        self, xml: ET.ElementTree[ET.Element], filename: str, page_name: str, page_id: str, rel_id: str, vis: VisioFile
+    ):
         self._xml = xml
         self.filename = filename
         self._name = page_name
@@ -60,7 +62,7 @@ class Page:
         self.master_unique_id: str | None = None
         self.master_base_id: str | None = None
         self.rels_xml_filename: str | None = None
-        self.rels_xml: ET.ElementTree | None = None
+        self.rels_xml: ET.ElementTree[ET.Element] | None = None
         self.vis = vis
         self.max_id = 0
         # todo: add page id - from pages_xml - PageSheet[ID]
@@ -192,11 +194,11 @@ class Page:
         self._pagesheet_cell("PageHeight").attrib["V"] = str(float(value or 0.0))
 
     @property
-    def xml(self) -> ET.ElementTree:
+    def xml(self) -> ET.ElementTree[ET.Element]:
         return self._xml
 
     @xml.setter
-    def xml(self, value: ET.ElementTree) -> None:
+    def xml(self, value: ET.ElementTree[ET.Element]) -> None:
         self._xml = value
 
     @property

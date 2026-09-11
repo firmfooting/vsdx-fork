@@ -28,7 +28,7 @@ class Media:
             self._palette_vsdx = VisioFile(file_path)
         return self._palette_vsdx
 
-    def close(self):
+    def close(self) -> None:
         if self._media_vsdx is not None:
             self._media_vsdx.close_vsdx()
             self._media_vsdx = None

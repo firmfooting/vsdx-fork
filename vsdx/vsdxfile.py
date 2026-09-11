@@ -7,7 +7,10 @@ import shutil
 import xml.dom.minidom as minidom  # minidom used for prettyprint
 import xml.etree.ElementTree as ET
 import zipfile
+from types import TracebackType
 from xml.etree.ElementTree import Element
+
+from typing_extensions import override
 
 import vsdx
 
@@ -27,7 +30,7 @@ from .masters import MastersImportMixin  # noqa: E402
 from .pages import Page, PagePosition  # noqa: E402
 from .shapes import Shape  # noqa: E402
 from .templating import JinjaTemplatingMixin  # noqa: E402
-from .xmlio import file_to_xml, xml_to_file  # noqa: E402
+from .xmlio import file_to_xml, require_element, require_root, require_tree, require_xml_tree, xml_to_file  # noqa: E402
 
 ET.register_namespace("", namespace[1:-1])
 ET.register_namespace("", ext_prop_namespace[1:-1])
@@ -54,7 +57,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
     :type master_pages: list of :class:`Page`
     """
 
-    def __init__(self, filename, debug: bool = False):
+    def __init__(self, filename: str, debug: bool = False) -> None:
         """VisioFile constructor
 
         :param filename: the vsdx file to load and create the VisioFile object from
@@ -72,34 +75,50 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
             raise TypeError(f"Invalid File Type:{file_type}")
 
         self.directory = os.path.abspath(filename)[:-5]
-        self.pages_xml = None  # type: ET.ElementTree
-        self.pages_xml_rels = None  # type: ET.ElementTree
-        self.content_types_xml = None  # type: ET.ElementTree
-        self.app_xml = None  # type: ET.ElementTree
-        self.document_xml = None  # type: ET.ElementTree
-        self.document_xml_rels = None  # type: ET.ElementTree
-        self.pages = list()  # type: List[Page]  # list of Page objects, populated by open_vsdx_file()
+        self.pages_xml: ET.ElementTree[ET.Element] | None = None
+        self.pages_xml_rels: ET.ElementTree[ET.Element] | None = None
+        self.content_types_xml: ET.ElementTree[ET.Element] | None = None
+        self.app_xml: ET.ElementTree[ET.Element] | None = None
+        self.document_xml: ET.ElementTree[ET.Element] | None = None
+        self.document_xml_rels: ET.ElementTree[ET.Element] | None = None
+        self.pages: list[Page] = []  # populated by open_vsdx_file()
         self.masters_xml: ET.Element | None = None  # <Masters> root element
-        self.master_index = {}  # dict of master page info by item name e.g. 'Dynamic Connector'
-        self.master_pages = list()  # type: List[Page]  # list of Page objects, populated by open_vsdx_file()
+        self.master_index: dict[str, Page] = {}  # master page info by item name e.g. 'Dynamic Connector'
+        self.master_pages: list[Page] = []  # populated by open_vsdx_file()
         self.file_open = False
-        self.zip_file_contents = {}  # dict of file contents by file_path
+        self.zip_file_contents: dict[str, io.BytesIO] = {}  # file contents by file_path
         self.open_vsdx_file()
 
-    def __enter__(self):
+    def __enter__(self) -> VisioFile:
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         self.close_vsdx()
 
     @staticmethod
-    def pretty_print_element(xml: Element) -> str:
-        if type(xml) is Element:
-            return minidom.parseString(ET.tostring(xml)).toprettyxml()
-        elif type(xml) is ET.ElementTree:
-            return minidom.parseString(ET.tostring(xml.getroot())).toprettyxml()
-        else:
-            return f"Not an Element. type={type(xml)}"
+    def _part_tree(tree: ET.ElementTree[ET.Element] | None, description: str) -> ET.ElementTree[ET.Element]:
+        """A required document part (pages.xml, app.xml, ...).
+
+        A missing part means the package is malformed for the operation being
+        attempted, so raise with the part name rather than failing on None.
+        """
+        return require_tree(tree, description)
+
+    @staticmethod
+    def _part_root(tree: ET.ElementTree[ET.Element] | None, description: str) -> ET.Element:
+        """Root element of a required document part."""
+        return require_element(VisioFile._part_tree(tree, description).getroot(), f"{description} root")
+
+    @staticmethod
+    def pretty_print_element(xml: Element | ET.ElementTree[ET.Element]) -> str:
+        if isinstance(xml, ET.ElementTree):
+            return minidom.parseString(ET.tostring(require_element(xml.getroot(), "element"))).toprettyxml()
+        return minidom.parseString(ET.tostring(xml)).toprettyxml()
 
     def _load_zip_file_contents_to_memory(self):
         """Open zip file and create a dictionary of file like objects by file_path"""
@@ -135,16 +154,16 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         return pages_filename
 
     @property
-    def _masters_folder(self):
-        path = f"{self.directory}/visio/masters"
-        return path
+    @override
+    def _masters_folder(self) -> str:
+        return f"{self.directory}/visio/masters"
 
     def load_pages(self):
         rel_dir = f"{self.directory}/visio/pages/_rels/"
         page_dir = f"{self.directory}/visio/pages/"
 
         rel_filename = rel_dir + "pages.xml.rels"
-        rels = file_to_xml(rel_filename, self.zip_file_contents).getroot()  # rels contains page filenames
+        rels = require_root(rel_filename, self.zip_file_contents, "pages.xml.rels")
         self.pages_xml_rels = file_to_xml(
             rel_filename, self.zip_file_contents
         )  # store pages.xml.rels so pages can be added or removed
@@ -158,21 +177,24 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
             relid_page_dict[rel_id] = page_file
 
         pages_filename = self._pages_filename()  # pages contains Page name, width, height, mapped to Id
-        pages = file_to_xml(
-            pages_filename, self.zip_file_contents
-        ).getroot()  # this contains a list of pages with rel_id and filename
+        pages = require_root(pages_filename, self.zip_file_contents, "pages.xml")
         self.pages_xml = file_to_xml(pages_filename, self.zip_file_contents)  # store xml so pages can be removed
         if self.debug:
             logger.debug("Pages(%s)\n%s", pages_filename, VisioFile.pretty_print_element(pages))
 
         for page in pages:  # type: Element
-            rel_id = page.find(f"{namespace}Rel").attrib[f"{r_namespace}id"]
+            rel_id = require_element(page.find(f"{namespace}Rel"), "Page/Rel").attrib[f"{r_namespace}id"]
             page_name = page.attrib["Name"]
 
-            page_path = page_dir + relid_page_dict.get(rel_id)
-            page_id = page.attrib.get("ID")
+            page_file = relid_page_dict.get(rel_id)
+            if page_file is None:
+                raise ValueError(f"no page part found for relationship {rel_id}")
+            page_path = page_dir + page_file
+            page_id = page.attrib.get("ID", "")
 
-            new_page = Page(file_to_xml(page_path, self.zip_file_contents), page_path, page_name, page_id, rel_id, self)
+            new_page = Page(
+                require_xml_tree(page_path, self.zip_file_contents, "page part"), page_path, page_name, page_id, rel_id, self
+            )
             # look for visio/pages/_rels/page3.xml.rels
             base_page_file_name = page_path.split(os.path.sep)[-1]
             page_rels_path = rel_dir + base_page_file_name + ".rels"
@@ -183,7 +205,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
             self.pages.append(new_page)
 
             if self.debug:
-                logger.debug("Page(%s)\n%s", new_page.filename, VisioFile.pretty_print_element(new_page.xml.getroot()))
+                logger.debug("Page(%s)\n%s", new_page.filename, VisioFile.pretty_print_element(new_page.xml))
 
         self.content_types_xml = file_to_xml(f"{self.directory}/[Content_Types].xml", self.zip_file_contents)
         # TODO: add correctness cross-check. Or maybe the other way round, start from [Content_Types].xml
@@ -195,21 +217,24 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         self.document_xml = file_to_xml(f"{self.directory}/visio/document.xml", self.zip_file_contents)
         self.document_xml_rels = file_to_xml(f"{self.directory}/visio/_rels/document.xml.rels", self.zip_file_contents)
 
-    def load_master_pages(self):
+    @override
+    def load_master_pages(self) -> None:
         # get data from /visio/masters folder
         master_rel_path = f"{self.directory}/visio/masters/_rels/masters.xml.rels"
 
         master_rels_data = file_to_xml(master_rel_path, self.zip_file_contents)
-        master_rels = master_rels_data.getroot() if master_rels_data else []
+        # a document with no masters has no rels part: iterate an empty list
+        master_rels = list(master_rels_data.getroot()) if master_rels_data is not None else []
         if self.debug:
-            logger.debug("Master Relationships(%s)\n%s", master_rel_path, VisioFile.pretty_print_element(master_rels))
+            logger.debug("Master Relationships(%s)\n%s", master_rel_path, master_rels)
 
         # populate relid to master path
-        relid_to_path = {}
+        relid_to_path: dict[str, str] = {}
         for rel in master_rels:
             master_id = rel.attrib.get("Id")
-            master_path = f"{self.directory}/visio/masters/{rel.attrib.get('Target')}"  # get path from rel
-            relid_to_path[master_id] = master_path
+            if master_id is None:
+                continue
+            relid_to_path[master_id] = f"{self.directory}/visio/masters/{rel.attrib.get('Target')}"
 
         # load masters.xml file
         masters_path = f"{self.directory}/visio/masters/masters.xml"
@@ -221,7 +246,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         # for each master page, create the Page object
         for master in self.masters_xml if self.masters_xml is not None else []:
             master_name = master.attrib.get("NameU") or master.attrib.get("Name") or "Unknown"
-            rel_id = master.find(f"{namespace}Rel").attrib[f"{r_namespace}id"]
+            rel_id = require_element(master.find(f"{namespace}Rel"), "Master/Rel").attrib[f"{r_namespace}id"]
             master_id = master.attrib["ID"]
             master_unique_id = master.attrib.get("UniqueID")
             master_base_id = master.attrib.get("BaseID")
@@ -229,7 +254,12 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
             master_path = relid_to_path[rel_id]
 
             master_page = Page(
-                file_to_xml(master_path, self.zip_file_contents), master_path, master_name, master_id, rel_id, self
+                require_xml_tree(master_path, self.zip_file_contents, "master part"),
+                master_path,
+                master_name,
+                master_id,
+                rel_id,
+                self,
             )
             master_page.master_unique_id = master_unique_id
             master_page.master_base_id = master_base_id
@@ -237,13 +267,11 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
             self.master_index[master_name] = master_page  # index by master_name
 
             if self.debug:
-                logger.debug(
-                    "Master(%s, id=%s)\n%s", master_path, master_id, VisioFile.pretty_print_element(master_page.xml.getroot())
-                )
+                logger.debug("Master(%s, id=%s)\n%s", master_path, master_id, VisioFile.pretty_print_element(master_page.xml))
 
         return
 
-    def get_page(self, n: int) -> Page:
+    def get_page(self, n: int) -> Page | None:
         try:
             return self.pages[n]
         except IndexError:
@@ -278,7 +306,8 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
             if m.page_id == id:
                 return m
 
-    def remove_page_by_index(self, index: int):
+    @override
+    def remove_page_by_index(self, index: int) -> None:
         """Remove zero-based nth page from VisioFile object
 
         :param index: Zero-based index of the page
@@ -288,10 +317,11 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         """
 
         # remove Page element from pages.xml file - zero based index
-        if type(index) is int:
-            page = self.pages_xml.find(f"{namespace}Page[{index + 1}]")
+        if isinstance(index, int):
+            pages_root = self._part_root(self.pages_xml, "pages.xml")
+            page = pages_root.find(f"{namespace}Page[{index + 1}]")
             if isinstance(page, Element):
-                self.pages_xml.getroot().remove(page)
+                pages_root.remove(page)
                 page = self.pages[index]  # type: Page
 
                 # remove internal references to page
@@ -301,7 +331,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
                 self.zip_file_contents.pop(self.pages[index].filename)
                 del self.pages[index]
 
-    def remove_page_by_name(self, page_name):
+    def remove_page_by_name(self, page_name: str) -> None:
         """Remove first page from VisioFile object that matches the page_name
 
         :param page_name: page of page to delete
@@ -313,15 +343,17 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         # get index and then pass to remove_page_by_index() to perform deletion
         for p in self.pages:
             if p.name == page_name:
-                self.remove_page_by_index(p.index_num)
+                index = p.index_num
+                if index is None:  # page is not attached to this document
+                    continue
+                self.remove_page_by_index(index)
                 break  # exit after first match - delete only one page
 
     def _update_pages_xml_rels(self, new_page_filename: str) -> str:
         """Updates the pages.xml.rels file with a reference to the new page and returns the new relid"""
 
-        max_relid = max(
-            self.pages_xml_rels.getroot(), key=lambda rel: int(rel.attrib["Id"][3:]), default=None
-        )  # 'rIdXX' -> XX
+        rels_root = self._part_root(self.pages_xml_rels, "pages.xml.rels")
+        max_relid = max(rels_root, key=lambda rel: int(rel.attrib["Id"][3:]), default=None)  # 'rIdXX' -> XX
         max_relid = int(max_relid.attrib["Id"][3:]) if max_relid is not None else 0
         new_page_relid = f"rId{max_relid + 1}"  # Most likely will be equal to len(self.pages)+1
 
@@ -330,9 +362,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
             "Type": "http://schemas.microsoft.com/visio/2010/relationships/page",
             "Id": new_page_relid,
         }
-        self.pages_xml_rels.getroot().append(
-            Element("{http://schemas.openxmlformats.org/package/2006/relationships}Relationship", new_page_rel)
-        )
+        rels_root.append(Element("{http://schemas.openxmlformats.org/package/2006/relationships}Relationship", new_page_rel))
 
         return new_page_relid
 
@@ -345,7 +375,8 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         return new_page_name
 
     def _get_max_page_id(self) -> int:
-        page_with_max_id = max(self.pages_xml.getroot(), key=lambda page: int(page.attrib["ID"]))
+        pages_root = self._part_root(self.pages_xml, "pages.xml")
+        page_with_max_id = max(pages_root, key=lambda page: int(page.attrib["ID"]))
         max_page_id = int(page_with_max_id.attrib["ID"])
 
         return max_page_id
@@ -369,8 +400,9 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
 
         return index
 
-    def _add_content_types_override(self, part_name_path: str, content_type: str):
-        content_types = self.content_types_xml.getroot()
+    @override
+    def _add_content_types_override(self, part_name_path: str, content_type: str) -> None:
+        content_types = self._part_root(self.content_types_xml, "[Content_Types].xml")
 
         # idempotent: skip if this exact PartName is already registered
         for existing in content_types.findall(f"{cont_types_namespace}Override"):
@@ -390,9 +422,9 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         else:  # add at end of list
             content_types.append(override_element)
 
-    def _update_content_types_xml(self, new_page_filename: str):
+    def _update_content_types_xml(self, new_page_filename: str) -> None:
         # todo: use generic function above
-        content_types = self.content_types_xml.getroot()
+        content_types = self._part_root(self.content_types_xml, "[Content_Types].xml")
 
         content_types_attribs = {
             "PartName": f"/visio/pages/{new_page_filename}",
@@ -411,10 +443,12 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         content_types.insert(idx + 1, content_types_element)
 
     def document_rels(self) -> list[Element]:
-        rels = self.document_xml_rels.findall(f"{document_rels_namespace}Relationship")
+        rels_root = self._part_root(self.document_xml_rels, "_rels/.rels")
+        rels = rels_root.findall(f"{document_rels_namespace}Relationship")
         return rels
 
-    def _add_document_rel(self, rel_type: str, target: str):
+    @override
+    def _add_document_rel(self, rel_type: str, target: str) -> None:
         # idempotent: skip if an identical relationship already exists
         for r in self.document_rels():
             if r.attrib.get("Type") == rel_type and r.attrib.get("Target") == target:
@@ -428,45 +462,48 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
                 "Target": target,
             },
         )
-        self.document_xml_rels.getroot().append(new_rel)
+        self._part_root(self.document_xml_rels, "_rels/.rels").append(new_rel)
 
     def _style_sheets(self) -> Element:
         # return StyleSheets element from document.xml
-        return self.document_xml.getroot().find(f"{namespace}StyleSheets")
+        root = self._part_root(self.document_xml, "document.xml")
+        return require_element(root.find(f"{namespace}StyleSheets"), "document.xml StyleSheets")
 
     def _get_styles_name_list(self) -> list[str]:
         return [s.attrib.get("Name", "") for s in self._style_sheets().findall(f"{namespace}StyleSheet")]
 
-    def _get_style_by_name(self, name: str) -> Element:
-        stylesheet = self._style_sheets().find(f"{namespace}StyleSheet[@Name = '{name}']")
-        return stylesheet
+    def _get_style_by_name(self, name: str) -> Element | None:
+        return self._style_sheets().find(f"{namespace}StyleSheet[@Name = '{name}']")
 
-    def _get_style_by_id(self, ID: str) -> Element:
-        stylesheet = self._style_sheets().find(f"{namespace}StyleSheet[@ID = '{ID}']")
-        return stylesheet
+    def _get_style_by_id(self, ID: str) -> Element | None:
+        return self._style_sheets().find(f"{namespace}StyleSheet[@ID = '{ID}']")
 
     def _heading_pairs(self) -> Element:
         # return HeadingPairs element from app.xml
-        return self.app_xml.getroot().find(f"{ext_prop_namespace}HeadingPairs")
+        root = self._part_root(self.app_xml, "docProps/app.xml")
+        return require_element(root.find(f"{ext_prop_namespace}HeadingPairs"), "app.xml HeadingPairs")
 
     def _titles_of_parts(self) -> Element:
         # return TitlesOfParts element from app.xml
-        return self.app_xml.getroot().find(f"{ext_prop_namespace}TitlesOfParts")
+        root = self._part_root(self.app_xml, "docProps/app.xml")
+        return require_element(root.find(f"{ext_prop_namespace}TitlesOfParts"), "app.xml TitlesOfParts")
 
     def _titles_of_parts_list(self) -> list[str]:
         # return list of strings
-        return [t.text for t in self._titles_of_parts().find(f".//{vt_namespace}vector")]
+        vector = require_element(self._titles_of_parts().find(f".//{vt_namespace}vector"), "TitlesOfParts vector")
+        return [t.text or "" for t in vector]
 
-    def _add_titles_of_parts_item(self, title: str):
+    def _add_titles_of_parts_item(self, title: str) -> None:
         titles = self._titles_of_parts()
-        vector = titles.find(f".//{vt_namespace}vector")  # new variant appended to vector Element
+        # new variant appended to vector Element
+        vector = require_element(titles.find(f".//{vt_namespace}vector"), "TitlesOfParts vector")
         new_title = Element(f"{vt_namespace}lpstr", {})
         new_title.text = title
         vector.append(new_title)
         # add one to vector size, as we have added two new variant elements
         vector.attrib["size"] = str(int(vector.attrib.get("size", 0)) + 1)
 
-    def _get_app_xml_value(self, name: str) -> str:
+    def _get_app_xml_value(self, name: str) -> str | None:
         variants = self._heading_pairs().findall(f".//{vt_namespace}variant")
         # find Pages in headings
         for index in range(len(variants)):
@@ -476,9 +513,9 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
                 next_v = variants[index + 1] if index < (len(variants) - 1) else None  # next variant if there is one
                 i4 = next_v.find(f".//{vt_namespace}i4") if type(next_v) is Element else None
                 if type(i4) is Element:
-                    return i4.text
+                    return i4.text or ""
 
-    def _set_app_xml_value(self, name: str, value: str):
+    def _set_app_xml_value(self, name: str, value: str) -> None:
         variants = self._heading_pairs().findall(f".//{vt_namespace}variant")
         # find Pages in headings
         for index in range(len(variants)):
@@ -491,7 +528,9 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
                     i4.text = value
                     return
         # no matching variant found - so create new item and populate it
-        vector = self._heading_pairs().find(f".//{vt_namespace}vector")  # new variant appended to vector Element
+        vector = require_element(
+            self._heading_pairs().find(f".//{vt_namespace}vector"), "HeadingPairs vector"
+        )  # new variant appended to vector Element
         name_variant = Element(f"{vt_namespace}variant", {})
         lpstr = Element(f"{vt_namespace}lpstr", {})
         lpstr.text = name
@@ -505,15 +544,14 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         # add two to vector size, as we have added two new variant elements
         vector.attrib["size"] = str(int(vector.attrib.get("size", 0)) + 2)
 
-    def _add_page_to_app_xml(self, new_page_name: str):
+    def _add_page_to_app_xml(self, new_page_name: str) -> None:
         # todo: use _add_titles_of_parts_item()
-        HeadingPairs = self._heading_pairs()
-        i4 = HeadingPairs.find(f".//{vt_namespace}i4")
-        num_pages = int(i4.text)
+        heading_pairs = self._heading_pairs()
+        i4 = require_element(heading_pairs.find(f".//{vt_namespace}i4"), "HeadingPairs i4")
+        num_pages = int(i4.text or 0)
         i4.text = str(num_pages + 1)  # increment as page added
 
-        TitlesOfParts = self.app_xml.getroot().find(f"{ext_prop_namespace}TitlesOfParts")
-        vector = TitlesOfParts.find(f"{vt_namespace}vector")
+        vector = require_element(self._titles_of_parts().find(f"{vt_namespace}vector"), "TitlesOfParts vector")
 
         lpstr = Element(f"{vt_namespace}lpstr")
         lpstr.text = new_page_name
@@ -524,13 +562,12 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
     def _remove_page_from_app_xml(self, page_name: str):
         if self.app_xml is not None:
             logger.debug("_remove_page_from_app_xml()")
-            HeadingPairs = self.app_xml.getroot().find(f"{ext_prop_namespace}HeadingPairs")
-            i4 = HeadingPairs.find(f".//{vt_namespace}i4")
-            num_pages = int(i4.text)
+            heading_pairs = self._heading_pairs()
+            i4 = require_element(heading_pairs.find(f".//{vt_namespace}i4"), "HeadingPairs i4")
+            num_pages = int(i4.text or 0)
             i4.text = str(num_pages - 1)  # decrement as page removed
 
-            TitlesOfParts = self.app_xml.getroot().find(f"{ext_prop_namespace}TitlesOfParts")
-            vector = TitlesOfParts.find(f"{vt_namespace}vector")
+            vector = require_element(self._titles_of_parts().find(f"{vt_namespace}vector"), "TitlesOfParts vector")
 
             for lpstr in vector.findall(f"{vt_namespace}lpstr"):
                 if lpstr.text == page_name:
@@ -567,7 +604,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
 
         # update pages.xml - insert the PageElement Element in it's correct location
         index = self._get_index(index=index, page=source_page)
-        self.pages_xml.getroot().insert(index, new_page_element)
+        self._part_root(self.pages_xml, "pages.xml").insert(index, new_page_element)
 
         # update [Content_Types].xml - insert reference to the new page
         self._update_content_types_xml(new_page_filename)
@@ -681,22 +718,25 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         new_page_relid = self._update_pages_xml_rels(new_page_filename)
 
         # Copy the source page and update relevant attributes
-        page_element = self.pages_xml.find(f"{namespace}Page[@Name='{page.name}']")
+        pages_root = self._part_root(self.pages_xml, "pages.xml")
+        page_element = require_element(
+            pages_root.find(f"{namespace}Page[@Name='{page.name}']"), f"pages.xml Page named {page.name}"
+        )
         new_page_element = ET.fromstring(ET.tostring(page_element))
 
         new_page_element.attrib["ID"] = str(self._get_max_page_id() + 1)
         new_page_element.attrib["NameU"] = new_page_name
         new_page_element.attrib["Name"] = new_page_name
-        new_page_element.find(f"{namespace}Rel").attrib[
+        require_element(new_page_element.find(f"{namespace}Rel"), "Page/Rel").attrib[
             "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"
         ] = new_page_relid
 
         # create the new page
         new_page = self._create_page(
-            new_page_xml_str=ET.tostring(page.xml.getroot()),
+            new_page_xml_str=ET.tostring(require_element(page.xml.getroot(), "page root"), encoding="unicode"),
             page_name=new_page_name,
             new_page_element=new_page_element,
-            index=index,
+            index=self._get_index(index=index, page=page),
             source_page=page,
         )
 
@@ -711,7 +751,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         return new_page
 
     # TODO: dead code - never used
-    def get_sub_shapes(self, shape: Element, nth=1):
+    def get_sub_shapes(self, shape: Element, nth: int = 1):
         for e in shape:
             if "Shapes" in e.tag:
                 nth -= 1
@@ -720,24 +760,23 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
 
     @staticmethod
     def get_shape_location(shape: Element) -> tuple[float, float]:
-        x, y = 0.0, 0.0
-        cell_PinX = shape.find(f'{namespace}Cell[@N="PinX"]')  # type: Element
-        cell_PinY = shape.find(f'{namespace}Cell[@N="PinY"]')
+        cell_PinX = require_element(shape.find(f'{namespace}Cell[@N="PinX"]'), "PinX cell")
+        cell_PinY = require_element(shape.find(f'{namespace}Cell[@N="PinY"]'), "PinY cell")
         x = float(cell_PinX.attrib["V"])
         y = float(cell_PinY.attrib["V"])
 
         return x, y
 
     @staticmethod
-    def set_shape_location(shape: Element, x: float, y: float):
-        cell_PinX = shape.find(f'{namespace}Cell[@N="PinX"]')  # type: Element
-        cell_PinY = shape.find(f'{namespace}Cell[@N="PinY"]')
+    def set_shape_location(shape: Element, x: float, y: float) -> None:
+        cell_PinX = require_element(shape.find(f'{namespace}Cell[@N="PinX"]'), "PinX cell")
+        cell_PinY = require_element(shape.find(f'{namespace}Cell[@N="PinY"]'), "PinY cell")
         cell_PinX.attrib["V"] = str(x)
         cell_PinY.attrib["V"] = str(y)
 
     @staticmethod
     # TODO: is this never used?
-    def get_shape_text(shape: ET) -> str:
+    def get_shape_text(shape: Element) -> str:
         # technically the below is not an exact replacement of the above...
         text = ""
         text_elem = shape.find(f"{namespace}Text")
@@ -747,7 +786,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
 
     @staticmethod
     # TODO: is this never used?
-    def set_shape_text(shape: ET, text: str):
+    def set_shape_text(shape: Element, text: str) -> None:
         t = shape.find(f"{namespace}Text")  # type: Element
         if t is not None:
             if t.text:
@@ -758,9 +797,9 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
     # context = {'customer_name':'codypy.com', 'year':2020 }
     # example shape text "For {{customer_name}}  (c){{year}}" -> "For codypy.com (c)2020"
     @staticmethod
-    def apply_text_context(shapes: Element, context: dict):
+    def apply_text_context(shapes: Element, context: dict[str, str]) -> None:
 
-        def _replace_shape_text(shape: Element, context: dict):
+        def _replace_shape_text(shape: Element, context: dict[str, str]) -> None:
             text = VisioFile.get_shape_text(shape)
 
             for key in context:
@@ -776,7 +815,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
             _replace_shape_text(shape, context)
 
     @staticmethod
-    def get_shape_id(shape: ET) -> str:
+    def get_shape_id(shape: Element) -> str:
         return shape.attrib["ID"]
 
     def create_shape(
@@ -813,6 +852,8 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         finally:
             media.close()
         new_shape = page.find_shape_by_id(new_shape_xml.attrib["ID"])
+        if new_shape is None:
+            raise ValueError("newly created shape not found on page")
 
         # palette shapes are drawn around their centre: position via PinX/PinY
         new_shape.get_or_create_cell("PinX", v=str(x))
@@ -827,7 +868,8 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
             new_shape.text = ""
         return new_shape
 
-    def increment_sub_shape_ids(self, shape: Shape, page, id_map: dict | None = None):
+    @override
+    def increment_sub_shape_ids(self, shape: Shape, page: Page, id_map: dict[str, int] | None = None) -> dict[str, int]:
         id_map = self.increment_shape_ids(shape.xml, page, id_map)
         self.update_ids(shape.xml, id_map)
         for s in shape.child_shapes:
@@ -837,7 +879,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
                 id_map = self.increment_sub_shape_ids(s, page, id_map)
         return id_map
 
-    def copy_shape(self, shape: Element, page: Page) -> ET:
+    def copy_shape(self, shape: Element, page: Page) -> Element:
         """Insert shape into first Shapes tag in destination page, and return the copy.
 
         If destination page does not have a Shapes tag yet, create it.
@@ -867,7 +909,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
 
         return new_shape
 
-    def insert_shape(self, shape: Element, shapes: Element, page: ET, page_path: str) -> ET:
+    def insert_shape(self, shape: Element, shapes: Element, page: Page, page_path: str) -> Element:
         # insert shape into shapes tag, and return updated shapes tag
         for page_obj in self.pages:
             if page_obj.filename == page_path:
@@ -878,9 +920,9 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         shapes.append(shape)
         return shapes
 
-    def increment_shape_ids(self, shape: Element, page: Page, id_map: dict | None = None):
+    def increment_shape_ids(self, shape: Element, page: Page, id_map: dict[str, int] | None = None) -> dict[str, int]:
         if id_map is None:
-            id_map = dict()
+            id_map = {}
         self.set_new_id(shape, page, id_map)
         for e in shape.findall(f"{namespace}Shapes"):
             self.increment_shape_ids(e, page, id_map)
@@ -889,7 +931,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
 
         return id_map
 
-    def set_new_id(self, element: Element, page: Page, id_map: dict):
+    def set_new_id(self, element: Element, page: Page, id_map: dict[str, int]) -> int:
         page.max_id += 1
         max_id = page.max_id
         if element.attrib.get("ID"):
@@ -898,7 +940,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         element.attrib["ID"] = str(max_id)
         return max_id  # return new id for info
 
-    def update_ids(self, shape: Element, id_map: dict):
+    def update_ids(self, shape: Element, id_map: dict[str, int]) -> None:
         # update: <ns0:Cell F="Sheet.15! replacing 15 with new id using prepopulated id_map
         # cycle through shapes looking for Cell tag inside a Shape tag, which may be inside a Shapes tag
         for e in shape.findall(f"{namespace}Shapes"):
@@ -926,7 +968,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
             shutil.rmtree(self.directory)
         self.file_open = False
 
-    def save_vsdx(self, new_filename=None):
+    def save_vsdx(self, new_filename: str | None = None):
         """save the VisioFile object as new vsdx file
 
         :param new_filename: path to save vsdx file
@@ -936,10 +978,14 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         if not self.file_open:
             raise VisioFileNotOpen("Unable to save a file after being closed or outside of 'with' block.")
         # write pages.xml.rels
-        xml_to_file(self.pages_xml_rels, f"{self.directory}/visio/pages/_rels/pages.xml.rels", self.zip_file_contents)
+        xml_to_file(
+            self._part_tree(self.pages_xml_rels, "pages.xml.rels"),
+            f"{self.directory}/visio/pages/_rels/pages.xml.rels",
+            self.zip_file_contents,
+        )
 
         # write pages.xml file - in case pages added removed
-        xml_to_file(self.pages_xml, self._pages_filename(), self.zip_file_contents)
+        xml_to_file(self._part_tree(self.pages_xml, "pages.xml"), self._pages_filename(), self.zip_file_contents)
 
         # write the master pages to file
         for page in self.master_pages:  # type: Page
@@ -948,21 +994,31 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         # write the pages to file
         for page in self.pages:  # type: Page
             xml_to_file(page.xml, page.filename, self.zip_file_contents)
-            if page.rels_xml_filename:
-                xml_to_file(page.rels_xml, page.rels_xml_filename, self.zip_file_contents)
+            if page.rels_xml_filename is not None:
+                xml_to_file(require_tree(page.rels_xml, "page rels"), page.rels_xml_filename, self.zip_file_contents)
 
         # write [content_Types].xml
-        xml_to_file(self.content_types_xml, f"{self.directory}/[Content_Types].xml", self.zip_file_contents)
+        xml_to_file(
+            self._part_tree(self.content_types_xml, "[Content_Types].xml"),
+            f"{self.directory}/[Content_Types].xml",
+            self.zip_file_contents,
+        )
 
         # write app.xml
         if self.app_xml is not None:
             xml_to_file(self.app_xml, f"{self.directory}/docProps/app.xml", self.zip_file_contents)
 
         # write document.xml
-        xml_to_file(self.document_xml, f"{self.directory}/visio/document.xml", self.zip_file_contents)
+        xml_to_file(
+            self._part_tree(self.document_xml, "document.xml"), f"{self.directory}/visio/document.xml", self.zip_file_contents
+        )
 
         # write document.xml.rels
-        xml_to_file(self.document_xml_rels, f"{self.directory}/visio/_rels/document.xml.rels", self.zip_file_contents)
+        xml_to_file(
+            self._part_tree(self.document_xml_rels, "document.xml.rels"),
+            f"{self.directory}/visio/_rels/document.xml.rels",
+            self.zip_file_contents,
+        )
 
         # wrap up files into zip and rename to vsdx
         base_filename = self.filename[:-5]  # remove ".vsdx" from end

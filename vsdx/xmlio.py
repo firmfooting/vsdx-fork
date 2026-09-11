@@ -14,11 +14,31 @@ def file_to_xml(filename: str, zip_file_contents: dict[str, io.BytesIO]) -> ET.E
     return None
 
 
-def xml_to_file(xml: ET.ElementTree, filename: str, zip_file_contents: dict[str, io.BytesIO]) -> None:
+def xml_to_file(xml: "ET.ElementTree[ET.Element]", filename: str, zip_file_contents: dict[str, io.BytesIO]) -> None:
     """Save an ElementTree to zip_file_contents."""
     file: io.BytesIO = io.BytesIO()
     xml.write(file, xml_declaration=True, method="xml", encoding="UTF-8")
     zip_file_contents[filename] = io.BytesIO(file.getvalue())
+
+
+def require_tree(tree: "ET.ElementTree[ET.Element] | None", description: str) -> "ET.ElementTree[ET.Element]":
+    """A required in-memory ElementTree (already parsed from the package)."""
+    if tree is None:
+        raise ValueError(f"expected document part not found: {description}")
+    return tree
+
+
+def require_xml_tree(filename: str, zip_file_contents: dict[str, io.BytesIO], description: str) -> ET.ElementTree[ET.Element]:
+    """Parse a required XML part from the zip and return its ElementTree."""
+    tree = file_to_xml(filename, zip_file_contents)
+    if tree is None:
+        raise ValueError(f"expected XML part not found: {description} ({filename})")
+    return tree
+
+
+def require_root(filename: str, zip_file_contents: dict[str, io.BytesIO], description: str) -> ET.Element:
+    """Parse a required XML part from the zip and return its root element."""
+    return require_element(require_xml_tree(filename, zip_file_contents, description).getroot(), description)
 
 
 def require_element(element: ET.Element | None, description: str) -> ET.Element:
