@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import io
 import os
 import shutil
@@ -8,18 +9,25 @@ import xml.etree.ElementTree as ET
 import zipfile
 from xml.etree.ElementTree import Element
 
+import vsdx
+
 from .logging_support import attach_debug_stream_handler, get_logger
-from .masters import MastersImportMixin
-from .templating import JinjaTemplatingMixin
-from .xmlio import file_to_xml, xml_to_file
 
 logger = get_logger(__name__)
 
-import vsdx
-
-from . import cont_types_namespace, document_rels_namespace, ext_prop_namespace, namespace, r_namespace, vt_namespace
-from .pages import Page, PagePosition
-from .shapes import Shape
+from . import (  # noqa: E402
+    cont_types_namespace,
+    document_rels_namespace,
+    ext_prop_namespace,
+    namespace,
+    r_namespace,
+    vt_namespace,
+)
+from .masters import MastersImportMixin  # noqa: E402
+from .pages import Page, PagePosition  # noqa: E402
+from .shapes import Shape  # noqa: E402
+from .templating import JinjaTemplatingMixin  # noqa: E402
+from .xmlio import file_to_xml, xml_to_file  # noqa: E402
 
 ET.register_namespace("", namespace[1:-1])
 ET.register_namespace("", ext_prop_namespace[1:-1])
@@ -697,10 +705,8 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         _, original_filename = os.path.split(page.filename)
         page_xml_rels_file = f"{self.directory}/visio/pages/_rels/{original_filename}.rels"  # TODO: better concatenation
         new_page_xml_rels_file = f"{self.directory}/visio/pages/_rels/{new_page_filename}.rels"  # TODO: better concatenation
-        try:
+        with contextlib.suppress(FileNotFoundError):
             shutil.copy(page_xml_rels_file, new_page_xml_rels_file)
-        except FileNotFoundError:
-            pass
 
         return new_page
 
@@ -774,7 +780,14 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         return shape.attrib["ID"]
 
     def create_shape(
-        self, page: Page, palette_name: str, x: float, y: float, w: float = None, h: float = None, text: str = None
+        self,
+        page: Page,
+        palette_name: str,
+        x: float,
+        y: float,
+        w: float | None = None,
+        h: float | None = None,
+        text: str | None = None,
     ) -> Shape:
         """Create a new shape on a page from the extended shape palette.
 
@@ -814,7 +827,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
             new_shape.text = ""
         return new_shape
 
-    def increment_sub_shape_ids(self, shape: Shape, page, id_map: dict = None):
+    def increment_sub_shape_ids(self, shape: Shape, page, id_map: dict | None = None):
         id_map = self.increment_shape_ids(shape.xml, page, id_map)
         self.update_ids(shape.xml, id_map)
         for s in shape.child_shapes:
@@ -865,7 +878,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         shapes.append(shape)
         return shapes
 
-    def increment_shape_ids(self, shape: Element, page: Page, id_map: dict = None):
+    def increment_shape_ids(self, shape: Element, page: Page, id_map: dict | None = None):
         if id_map is None:
             id_map = dict()
         self.set_new_id(shape, page, id_map)
@@ -908,11 +921,9 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         return shape
 
     def close_vsdx(self):
-        try:
+        with contextlib.suppress(FileNotFoundError):
             # Remove extracted folder if there
             shutil.rmtree(self.directory)
-        except FileNotFoundError:
-            pass
         self.file_open = False
 
     def save_vsdx(self, new_filename=None):
@@ -957,9 +968,8 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         base_filename = self.filename[:-5]  # remove ".vsdx" from end
         if new_filename.find(os.sep) > 0:
             directory = new_filename[0 : new_filename.rfind(os.sep)]
-            if directory:
-                if not os.path.exists(directory):
-                    os.mkdir(directory)
+            if directory and not os.path.exists(directory):
+                os.mkdir(directory)
 
         # write content from zip_file_contents to zip file directory
         if self.zip_file_contents:

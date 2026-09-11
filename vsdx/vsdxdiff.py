@@ -55,8 +55,8 @@ class VisioFileDiff:
         if data:
             for line in data:  # type: str
                 lines = VisioFileDiff.break_xml_into_lines(line)
-                for l in lines:
-                    data_out.append(l)
+                for line_part in lines:
+                    data_out.append(line_part)
         return data_out
 
     @staticmethod
@@ -72,10 +72,7 @@ class VisioFileDiff:
 
     def compare_members(self) -> bool:
         # return True if same, False if different
-        if self.contents_a.keys() == self.contents_b.keys():
-            return True
-        else:
-            return False
+        return self.contents_a.keys() == self.contents_b.keys()
 
     def added_members(self) -> set:
         # list members in file b that are not in file a

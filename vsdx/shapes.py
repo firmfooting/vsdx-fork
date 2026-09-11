@@ -157,10 +157,9 @@ class DataProperty:
     def remove_attribute(self, name: str, attrib: str) -> bool:
         """Remove the attribute from the cell element"""
         element = self._get_element(name)
-        if isinstance(element, Element):
-            if attrib in element.attrib:
-                del element.attrib[attrib]
-                return True
+        if isinstance(element, Element) and attrib in element.attrib:
+            del element.attrib[attrib]
+            return True
         return False
 
     def _get_element(self, name: str) -> Element | None:
@@ -257,13 +256,9 @@ class Shape:
         dst_page = page or self.page
         new_shape_xml = self.page.vis.copy_shape(self.xml, dst_page)
 
-        # set parent: location for new shape tag to be added
-        if page:
-            # set parent to first page Shapes tag if destination page passed
-            parent = page._shapes
-        else:
-            # or set parent to source shapes own parent
-            parent = self.parent
+        # parent decides where the new shape tag lands: the destination
+        # page's Shapes tag, or the source shape's own parent
+        parent = page._shapes if page else self.parent
 
         return Shape(xml=new_shape_xml, parent=parent, page=dst_page)
 
@@ -559,7 +554,7 @@ class Shape:
             self.begin_y = self.begin_y + y_delta
         self.y = self.y + y_delta
 
-    def get_or_create_cell(self, name: str, v: str = None, f: str = None) -> vsdx.Cell:
+    def get_or_create_cell(self, name: str, v: str | None = None, f: str | None = None) -> vsdx.Cell:
         """Set or create a named cell on this shape.
 
         Existing cells have their V/F attributes updated in place. New cells
@@ -635,7 +630,7 @@ class Shape:
         # get bounds of a shape relative to it's parent (if shape has a parent)
         bx, by, ex, ey = self.bounds
         if self.parent and self.parent.shape_type == "Group":
-            pbx, pby, pex, pey = self.parent.bounds
+            pbx, pby, _pex, _pey = self.parent.bounds
             bx += pbx
             by += pby
             ex += pbx
@@ -761,10 +756,7 @@ class Shape:
         # a Shapes has a list of Shape
         # a Shape can have 0 or 1 Shapes (1 if type is Group)
 
-        if self.shape_type == "Group":
-            parent_element = self.xml.find(f"{namespace}Shapes")
-        else:  # a Shapes
-            parent_element = self.xml
+        parent_element = self.xml.find(f"{namespace}Shapes") if self.shape_type == "Group" else self.xml
 
         if isinstance(parent_element, Element):
             shapes = [Shape(xml=shape, parent=self, page=self.page) for shape in parent_element.findall(f"{namespace}Shape")]
@@ -778,7 +770,7 @@ class Shape:
         # return all shapes within another shape, recursively
         return self._all_shapes()
 
-    def _all_shapes(self, shapes: list[Shape] = None) -> list[Shape]:
+    def _all_shapes(self, shapes: list[Shape] | None = None) -> list[Shape]:
         # recursively search for shapes and return all found
         if not shapes:
             shapes = list()
@@ -850,30 +842,27 @@ class Shape:
     def find_shape_by_property_label(self, property_label: str) -> Shape:  # returns Shape
         # recursively search for shapes by property name and return first match
         for shape in self.all_shapes:  # type: Shape
-            if property_label in shape.data_properties.keys():
+            if property_label in shape.data_properties:
                 return shape
 
-    def find_shapes_by_property_label(self, property_label: str, shapes: list[Shape] = None) -> list[Shape]:
+    def find_shapes_by_property_label(self, property_label: str, shapes: list[Shape] | None = None) -> list[Shape]:
         # recursively search for shapes by property label and return all matches
-        return [s for s in self.all_shapes if property_label in s.data_properties.keys()]
+        return [s for s in self.all_shapes if property_label in s.data_properties]
 
     def find_shape_by_property_label_value(self, property_label: str, property_value: str) -> Shape:  # returns Shape
         # recursively search for shapes by property label and value, and return first match
         for shape in self.all_shapes:  # type: Shape
-            if (
-                property_label in shape.data_properties.keys()
-                and str(shape.data_properties[property_label].value) == property_value
-            ):
+            if property_label in shape.data_properties and str(shape.data_properties[property_label].value) == property_value:
                 return shape
 
     def find_shapes_by_property_label_value(
-        self, property_label: str, property_value: str, shapes: list[Shape] = None
+        self, property_label: str, property_value: str, shapes: list[Shape] | None = None
     ) -> list[Shape]:
         # recursively search for shapes by property label and return all matches
         return [
             s
             for s in self.all_shapes
-            if property_label in s.data_properties.keys() and str(s.data_properties[property_label].value) == property_value
+            if property_label in s.data_properties and str(s.data_properties[property_label].value) == property_value
         ]
 
     def apply_text_filter(self, context: dict):

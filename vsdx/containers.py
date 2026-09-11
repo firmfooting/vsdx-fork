@@ -142,7 +142,7 @@ class Container:
 
     # ---- operations ------------------------------------------------------
 
-    def add_swimlane(self, label: str = None) -> Shape:
+    def add_swimlane(self, label: str | None = None) -> Shape:
         """Add a lane above the current top lane by cloning it and shifting
         one lane pitch. The Swimlane List and CFF Container grow to match.
 

@@ -11,7 +11,7 @@ from .shapes import Shape
 class Connect:
     """Connect class to represent a connection between two `Shape` objects"""
 
-    def __init__(self, xml: Element = None, page: vsdx.Page = None):
+    def __init__(self, xml: Element | None = None, page: vsdx.Page = None):
         if page is None:
             return
         if type(xml) is Element:  # create from xml
@@ -25,8 +25,8 @@ class Connect:
     @staticmethod
     def create(
         page: vsdx.Page = None,
-        from_shape: Shape = None,
-        to_shape: Shape = None,
+        from_shape: Shape | None = None,
+        to_shape: Shape | None = None,
         route: str = "dynamic",
         from_cp: int = 0,
         to_cp: int = 0,
@@ -115,7 +115,7 @@ class Connect:
             return connector_shape
 
     @staticmethod
-    def _get_or_create_cell(shape: Shape, name: str, v: str = None, f: str = None):
+    def _get_or_create_cell(shape: Shape, name: str, v: str | None = None, f: str | None = None):
         """Set or create a cell on a shape, preserving schema cell ordering.
 
         Delegates to the single cell-write primitive on Shape.
@@ -149,7 +149,7 @@ class Connect:
 
         if route == "point":
             ends = (("Begin", "EndX", from_shape, from_cp), ("End", "BeginX", to_shape, to_cp))
-            for prefix, opposite_cell, shape, cp in ends:
+            for prefix, _opposite_cell, shape, cp in ends:
                 cp_count = Connect._connection_point_count(shape)
                 if cp >= cp_count:
                     raise ValueError(
@@ -217,8 +217,8 @@ class Connect:
     def retarget(
         page: vsdx.Page,
         connector_shape: Shape,
-        from_shape: Shape = None,
-        to_shape: Shape = None,
+        from_shape: Shape | None = None,
+        to_shape: Shape | None = None,
         route: str = "dynamic",
         from_cp: int = 0,
         to_cp: int = 0,

@@ -400,7 +400,7 @@ class Page:
         """Return the page's CFF Container (swimlane diagram root), or None."""
         return vsdx.Container.find(self)
 
-    def add_swimlane(self, label: str = None) -> Shape:
+    def add_swimlane(self, label: str | None = None) -> Shape:
         """Add a swimlane to this page's CFF Container (clones the last lane).
 
         :returns: the new lane Shape
@@ -420,8 +420,8 @@ class Page:
     def reanchor_connector(
         self,
         connector_shape: Shape,
-        from_shape: Shape = None,
-        to_shape: Shape = None,
+        from_shape: Shape | None = None,
+        to_shape: Shape | None = None,
         route: str = "dynamic",
         from_cp: int = 0,
         to_cp: int = 0,
