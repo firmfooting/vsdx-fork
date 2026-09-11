@@ -82,31 +82,30 @@ result and shows the membership (manual COM check script provided).
 - [ ] every WI above adds pytest cases using the com_reference fixtures
 - [ ] Visio open-check harness (`tools/visio_check.ps1`) for local ground-truth validation
 
-### WI-6 — master-import (P0, next)
+### WI-6 — master-import (P0) ✅ done (branch feat/master-import, upstream PR #96)
 
 Goal: `Connect.create()` (and any master-carrying shape copy) works on
 documents that carry their own masters. Sub-steps:
 
-- [ ] 6a ground truth: COM capture — take a doc with own masters
-  (test3_house), paste a Dynamic-connector-master shape from a corpus file,
-  save, and diff the zip (masters.xml, masters rels, content types, pasted
-  shape's Master attribute, app.xml counts)
-- [ ] 6b implement `VisioFile._ensure_master(shape) -> target_master_id`:
-  no-op when the master name exists; else copy master part under the next
-  free filename, append Master element with fresh unique ID, add masters.xml
-  rels entry, content-type override, rewrite the copied shape's Master
-  attribute, update app.xml
-- [ ] 6c rewire `Connect.create()`: replace the three-branch provisioning
-  mess with no-masters provisioning (existing path) + `_ensure_master`
-- [ ] 6d tests: lift the strict-xfails (test3_house/test4 params must pass
-  AND open in Visio); `_ensure_master` idempotency (import twice → one
-  master); multi-connector regression still green
-- [ ] 6e Visio ground-truth validation via tools/visio_check.ps1
-- [ ] 6f upstream PR: master-import + dedupe helpers + state guard, anchored
-  to upstream #93 (also closes the #77/#63 symptom class)
+- [x] 6a ground truth: COM paste capture — masters.xml carries logical Master
+  IDs (NameU + BaseID preserved), masters.xml.rels maps rel→part, content
+  types declare both, PAGE rels carry a per-page master relationship, app.xml
+  carries nothing
+- [x] 6b `VisioFile._ensure_masters_for_shape(source_shape)` — imports by
+  NAME (MatchByName; numeric IDs are per-document — the numeric-ID match bug
+  was caught by tests mid-build), `_bootstrap_masters()` for masters-less docs
+- [x] 6c `Connect.create()` rewired: bootstrap or source-then-copy import;
+  dedupe guards on document rels + content types; app.xml Masters count
+  dropped (Visio omits it); page rels now registered so save persists them
+- [x] 6d tests: strict-xfail lifted (test3_house param passes); idempotency
+  and single-master-import regression tests; 352 passed / 342 on upstream base
+- [x] 6e Visio ground-truth validation: test3_house + test8 both PASS with
+  the imported connector carrying _WALKGLUE
+- [x] 6f upstream PR #96 opened (master-import + dedupe + state guard,
+  scoped without the formula engine); curved-connector one-liner is PR #95
 
-Accept: all xfails lifted, Visio opens every generated file, upstream PR cut
-from the tested state.
+Accept: all xfails lifted, Visio opens every generated file, upstream PRs
+cut from the tested state. **Met.**
 
 ## Upstream posture (decided 2026-09-11)
 
