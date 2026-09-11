@@ -7,6 +7,7 @@ if TYPE_CHECKING:
     from .vsdxfile import VisioFile
 import vsdx
 
+import io
 import xml.etree.ElementTree as ET
 
 import deprecation
@@ -199,6 +200,35 @@ class Page:
             connects = self.xml.find(f".//{namespace}Connects")
 
         connects.append(connect.xml)
+
+    def _ensure_page_master_rel(self, master_rel_id: str, master_part_name: str):
+        """Ensure this page's rels reference the given master part.
+
+        Visio writes a per-page relationship to each master used by shapes on
+        that page (Target '../masters/masterN.xml'). The rels part is created
+        on demand; the filename is registered so save_vsdx persists it.
+        """
+        if self.rels_xml is None:
+            rels_filename = self.filename.replace('visio/pages/', 'visio/pages/_rels/') + '.rels'
+            self.rels_xml_filename = rels_filename
+            self.rels_xml = ET.ElementTree(ET.fromstring(
+                '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>'))
+        rels_root = self.rels_xml.getroot()
+        assert rels_root is not None
+        existing = {r.attrib.get('Target') for r in rels_root}
+        target = f'../masters/{master_part_name}'
+        if target in existing:
+            return
+        rel_element = ET.fromstring(
+            f'<Relationship xmlns="http://schemas.openxmlformats.org/package/2006/relationships" '
+            f'Type="http://schemas.microsoft.com/visio/2010/relationships/master" '
+            f'Id="{master_rel_id}" Target="{target}"/>')
+        rels_root.append(rel_element)
+        # persist into the zip contents so save picks it up even for pages
+        # that never had a rels part before
+        if self.rels_xml_filename:
+            self.vis.zip_file_contents[self.rels_xml_filename] = io.BytesIO(
+                ET.tostring(rels_root, xml_declaration=True, encoding='UTF-8'))
 
     def get_connects(self):
         elements = self.xml.findall(f".//{namespace}Connect")  # search recursively

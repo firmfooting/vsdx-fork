@@ -34,60 +34,49 @@ class Connect:
         if from_shape and to_shape:  # create new connector shape and connect items between this and the two shapes
             # create new connect shape and get id
             media = vsdx.Media()
-            connector_shape = media.straight_connector.copy(page)  # default to straight connector
-            connector_shape.text = ''  # clear text used to find shape
-            if not os.path.exists(page.vis._masters_folder):
-                # Add masters folder to directory if not already present
+            media_shape = media.straight_connector
+            # guard on in-memory document state, not the filesystem: the
+            # extracted folder only exists after save_vsdx(), so an
+            # os.path.exists guard re-provisions on the second Connect.create()
+            # and duplicates package metadata (#93)
+            masters_rel_present = any(
+                r.attrib.get('Type') == 'http://schemas.microsoft.com/visio/2010/relationships/masters'
+                for r in page.vis.document_rels())
+            new_master_id = None
+            if not masters_rel_present:
+                # document has no masters at all: copy the media masters folder
                 for file_name, file in media._media_vsdx.zip_file_contents.items():
                     if file_name.startswith(media._media_vsdx._masters_folder):
                         new_file_name = file_name.replace(media._media_vsdx._masters_folder, page.vis._masters_folder)
                         page.vis.zip_file_contents[new_file_name] = file
-                page.vis.load_master_pages()  # load copied master page files into VisioFile object
-                # add new master to document relationship
+                page.vis.load_master_pages()
                 page.vis._add_document_rel(rel_type="http://schemas.microsoft.com/visio/2010/relationships/masters",
                                            target="masters/masters.xml")
-                # create masters/master1 elements in [Content_Types].xml
                 page.vis._add_content_types_override(content_type="application/vnd.ms-visio.masters+xml",
                                                      part_name_path="/visio/masters/masters.xml")
                 page.vis._add_content_types_override(content_type="application/vnd.ms-visio.master+xml",
                                                      part_name_path="/visio/masters/master1.xml")
-                # create an initial copy of page_rels from media and attach to this page
-                page_rels_xml = copy.deepcopy(media.rels_xml)
-                page.rels_xml = page_rels_xml
-            elif connector_shape.shape_name not in page.vis._titles_of_parts_list():
-                print(f"Warning: Updating existing Page/Master relationships not yet fully implemented. "
-                      f"This may cause unexpected outputs.")
-                # vsdx has masters - but not this shape
-                # todo: Complete this scenario
-                #print("conn master page", connector_shape.master_shape.page.filename)
-                #print("max page file num", [p.filename[-5:-4] for p in page.vis.master_pages])
-                #print("max page id", [p.page_id for p in page.vis.master_pages])
-                rel_num = max([int(p.filename[-5:-4]) for p in page.vis.master_pages]) +1
-                master_file_path = os.path.join(page.vis.directory, 'visio', 'masters', f'master{rel_num}.xml')
-                #print(f"m_num={rel_num} master_file_path={master_file_path}")
-                shutil.copy(connector_shape.master_shape.page.filename, master_file_path)
-                # todo: ensure master page ID and RId is unique, update shape master_id to refer to new master
-                # todo: update mast file name, and add content type override
-                # todo: update masters.xml file contents?
-                # todo: update visio/pages/_rels/page3.xml.rels - add: <Relationship Id="rId3" Type="http://schemas.microsoft.com/visio/2010/relationships/master" Target="../masters/master1.xml"/>
-                rels = page.rels_xml.getroot()
-                new_rel = ET.fromstring(f'<Relationship  xmlns="{vsdx.document_rels_namespace[1:-1]}" '
-                                        f'Type="http://schemas.microsoft.com/visio/2010/relationships/master" />')
-                new_rel.attrib['Id'] = f"rID{rel_num}"
-                new_rel.attrib['Target'] = f"../masters/master{rel_num}.xml"
-                rels.append(new_rel)
-                page.vis._add_content_types_override(content_type="application/vnd.ms-visio.master+xml",
-                                                     part_name_path=f"/visio/masters/master{rel_num}.xml")
+                # per-page master relationship (creates + registers the page
+                # rels part so save_vsdx persists it)
+                page._ensure_page_master_rel('rId1', 'master1.xml')
             else:
-                # vsdx has this master shape, but not related to this page
-                master_page = page.vis.master_index.get(connector_shape.shape_name)  # type: vsdx.Page
-                rel_num = int(master_page.rel_id[-1])
-                rels = page.rels_xml.getroot()
-                new_rel = ET.fromstring(f'<Relationship  xmlns="{vsdx.document_rels_namespace[1:-1]}" '
-                                        f'Type="http://schemas.microsoft.com/visio/2010/relationships/master" />')
-                new_rel.attrib['Id'] = master_page.rel_id
-                new_rel.attrib['Target'] = "../masters/master1.xml"
-                rels.append(new_rel)
+                # document has masters: import the connector master (by name)
+                # BEFORE the copy, while media_shape still points at its source
+                new_master_id = page.vis._ensure_masters_for_shape(media_shape) or None
+
+            connector_shape = media_shape.copy(page)  # default to straight connector
+            connector_shape.text = ''  # clear text used to find shape
+            if new_master_id:
+                # repoint the copied shape at this document's imported master
+                connector_shape.xml.attrib['Master'] = new_master_id
+                connector_shape.master_page_ID = new_master_id
+
+            # per-page relationship for whichever master the connector uses
+            effective_master_id = new_master_id or connector_shape.master_page_ID
+            master_page = page.vis.get_master_page_by_id(effective_master_id) if effective_master_id else None
+            if master_page is not None:
+                master_part = master_page.filename.replace(page.vis._masters_folder + '/', '')
+                page._ensure_page_master_rel(master_page.rel_id, master_part)
 
             # update HeadingPairs and TitlesOfParts in app.xml
             if page.vis._get_app_xml_value('Masters') is None:
