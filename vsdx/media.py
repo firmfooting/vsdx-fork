@@ -24,7 +24,7 @@ class Media:
 
     @property
     def curved_connector(self):
-        return self._media_vsdx.pages[0].find_shape_by_text(Media.straight_connector_text)
+        return self._media_vsdx.pages[0].find_shape_by_text(Media.curved_connector_text)
 
     @property
     def rectangle(self):
