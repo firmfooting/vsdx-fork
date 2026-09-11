@@ -554,6 +554,40 @@ class Shape:
             self.begin_y = self.begin_y + y_delta
         self.y = self.y + y_delta
 
+    def get_or_create_cell(self, name: str, v: str = None, f: str = None) -> 'vsdx.Cell':
+        """Set or create a named cell on this shape.
+
+        Existing cells have their V/F attributes updated in place. New cells
+        are inserted after the last direct Cell child so the shape keeps the
+        schema ordering (cells ahead of Text/Sections).
+
+        :param name: cell name (N attribute), e.g. 'PinX'
+        :param v: value to set on the V attribute (optional)
+        :param f: formula to set on the F attribute (optional)
+        :return: the Cell object
+        """
+        cell = self.cells.get(name)
+        if cell is not None:
+            if f is not None:
+                cell.formula = f
+            if v is not None:
+                cell.value = v
+            return cell
+        attribs = f'N="{name}"'
+        if v is not None:
+            attribs += f' V="{v}"'
+        if f is not None:
+            attribs += f' F="{f}"'
+        cell_el = ET.fromstring(f'<Cell xmlns="{vsdx.namespace[1:-1]}" {attribs}/>')
+        insert_at = 0
+        for i, child in enumerate(list(self.xml)):
+            if child.tag == f'{vsdx.namespace}Cell':
+                insert_at = i + 1
+        self.xml.insert(insert_at, cell_el)
+        cell = vsdx.Cell(xml=cell_el, shape=self)
+        self.cells[name] = cell
+        return cell
+
     @property
     def height(self):
         return to_float(self.cell_value('Height'))

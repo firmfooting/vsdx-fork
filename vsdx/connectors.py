@@ -109,29 +109,11 @@ class Connect:
 
     @staticmethod
     def _get_or_create_cell(shape: Shape, name: str, v: str = None, f: str = None):
-        """Set or create a cell on a shape, preserving schema cell ordering."""
-        cell = shape.cells.get(name)
-        if cell is not None:
-            if f is not None:
-                cell.formula = f
-            if v is not None:
-                cell.value = v
-            return cell
-        attribs = f'N="{name}"'
-        if v is not None:
-            attribs += f' V="{v}"'
-        if f is not None:
-            attribs += f' F="{f}"'
-        cell_el = ET.fromstring(f'<Cell xmlns="{vsdx.namespace[1:-1]}" {attribs}/>')
-        # insert after the last direct Cell child so cells stay ahead of Text/Sections
-        insert_at = 0
-        for i, child in enumerate(list(shape.xml)):
-            if child.tag == f'{vsdx.namespace}Cell':
-                insert_at = i + 1
-        shape.xml.insert(insert_at, cell_el)
-        cell = vsdx.Cell(xml=cell_el, shape=shape)
-        shape.cells[name] = cell
-        return cell
+        """Set or create a cell on a shape, preserving schema cell ordering.
+
+        Delegates to the single cell-write primitive on Shape.
+        """
+        return shape.get_or_create_cell(name, v=v, f=f)
 
     @staticmethod
     def _connection_point_count(shape: Shape) -> int:
