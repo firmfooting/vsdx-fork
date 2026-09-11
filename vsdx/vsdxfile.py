@@ -79,7 +79,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         self.document_xml = None  # type: ET.ElementTree
         self.document_xml_rels = None  # type: ET.ElementTree
         self.pages = list()  # type: List[Page]  # list of Page objects, populated by open_vsdx_file()
-        self.masters_xml = None  # type: ET.ElementTree
+        self.masters_xml: ET.Element | None = None  # <Masters> root element
         self.master_index = {}  # dict of master page info by item name e.g. 'Dynamic Connector'
         self.master_pages = list()  # type: List[Page]  # list of Page objects, populated by open_vsdx_file()
         self.file_open = False
@@ -216,10 +216,10 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         masters_xml = file_to_xml(
             masters_path, self.zip_file_contents
         )  # contains more info about master page (i.e. Name, Icon)
-        self.masters_xml = masters_xml.getroot() if masters_xml else []
+        self.masters_xml = masters_xml.getroot() if masters_xml is not None else None
 
         # for each master page, create the Page object
-        for master in self.masters_xml:
+        for master in self.masters_xml if self.masters_xml is not None else []:
             master_name = master.attrib.get("NameU") or master.attrib.get("Name") or "Unknown"
             rel_id = master.find(f"{namespace}Rel").attrib[f"{r_namespace}id"]
             master_id = master.attrib["ID"]
@@ -966,20 +966,26 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
 
         # wrap up files into zip and rename to vsdx
         base_filename = self.filename[:-5]  # remove ".vsdx" from end
-        if new_filename.find(os.sep) > 0:
+        if new_filename is not None and new_filename.find(os.sep) > 0:
             directory = new_filename[0 : new_filename.rfind(os.sep)]
             if directory and not os.path.exists(directory):
                 os.mkdir(directory)
 
         # write content from zip_file_contents to zip file directory
         if self.zip_file_contents:
-            self._save_zip_file_contents_to_disk(new_filename or base_filename + ".zip")
+            if not new_filename:
+                # in-place save: write the zip under its final name directly
+                self._save_zip_file_contents_to_disk(self.filename)
+                return
+            if not new_filename.endswith(".vsdx"):
+                new_filename += ".vsdx"
+            self._save_zip_file_contents_to_disk(new_filename)
+            self.directory = os.path.abspath(new_filename)[:-5]
             return
 
         shutil.make_archive(base_filename, "zip", self.directory)
-
         if not new_filename:
-            shutil.move(base_filename + ".zip", base_filename + "_new.vsdx")
+            shutil.move(base_filename + ".zip", self.filename)
         else:
             if new_filename[-5:] != ".vsdx":
                 new_filename += ".vsdx"

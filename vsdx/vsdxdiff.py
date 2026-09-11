@@ -41,17 +41,17 @@ class VisioFileDiff:
         d = difflib.Differ()
         for member_name in common_members:
             data_a = self.contents_a.get(member_name)
-            data_a = VisioFileDiff.break_all_xml_into_lines(data_a)
+            data_a = VisioFileDiff.break_all_xml_into_lines(data_a or [])
             # print(data_a)
             data_b = self.contents_b.get(member_name)
-            data_b = VisioFileDiff.break_all_xml_into_lines(data_b)
+            data_b = VisioFileDiff.break_all_xml_into_lines(data_b or [])
             if data_a and data_b and data_a != data_b:  # only add diff if contents are not the same
                 diffs[member_name] = list(d.compare(data_a, data_b))
         return diffs
 
     @staticmethod
-    def break_all_xml_into_lines(data: list) -> list:
-        data_out = []
+    def break_all_xml_into_lines(data: list[str]) -> list[str]:
+        data_out: list[str] = []
         if data:
             for line in data:  # type: str
                 lines = VisioFileDiff.break_xml_into_lines(line)
@@ -60,11 +60,11 @@ class VisioFileDiff:
         return data_out
 
     @staticmethod
-    def break_xml_into_lines(x: str) -> list:
+    def break_xml_into_lines(x: str) -> list[str]:
         x = x.replace("<", "\n<")  # add CR before each element start
         return x.split("\n")
 
-    def common_members(self) -> list:
+    def common_members(self) -> list[str]:
         # return a sorted list of members (file paths)
         common_members = list(set(self.contents_a.keys()).union(set(self.contents_b.keys())))
         common_members.sort()
@@ -74,20 +74,20 @@ class VisioFileDiff:
         # return True if same, False if different
         return self.contents_a.keys() == self.contents_b.keys()
 
-    def added_members(self) -> set:
+    def added_members(self) -> set[str]:
         # list members in file b that are not in file a
         members_a = set(self.contents_a.keys())
         members_b = set(self.contents_b.keys())
         return members_b.difference(members_a)
 
-    def removed_members(self) -> set:
+    def removed_members(self) -> set[str]:
         # list members in file b that are not in file a
         members_a = set(self.contents_a.keys())
         members_b = set(self.contents_b.keys())
         return members_a - members_b
 
     @staticmethod
-    def extract_file_data(file_path: str) -> dict:
+    def extract_file_data(file_path: str) -> dict[str, list[str]]:
         # open a vsdx file (or other zip based format) and return a dictionary of file contents by file_path
         directory = os.path.abspath(file_path)[:-5]  # -5 to remove '.vsdx' from filename
         with zipfile.ZipFile(file_path, "r") as zip_ref:
@@ -95,7 +95,7 @@ class VisioFileDiff:
             zip_ref.extractall(directory)
 
         # process data in directory
-        file_contents = {}
+        file_contents: dict[str, list[str]] = {}
         for extracted_file_path in extracted_file_paths:
             # print(f"Opening {os.path.join(directory, extracted_file_path)}")
             full_path = os.path.join(directory, extracted_file_path)
@@ -106,10 +106,10 @@ class VisioFileDiff:
                     file_contents[extracted_file_path] = file_data
                     # print(f"Opened and read contents of {extracted_file_path}")
             except UnicodeDecodeError:
-                file_contents[extracted_file_path] = "Unable to decode file."
+                file_contents[extracted_file_path] = ["Unable to decode file."]
                 logger.warning("Failed to read file: %s", full_path)
             except PermissionError:
-                file_contents[extracted_file_path] = "Unable to open file."
+                file_contents[extracted_file_path] = ["Unable to open file."]
                 logger.warning("Failed to open file (PermissionError): %s", full_path)
         try:
             # Remove extracted folder

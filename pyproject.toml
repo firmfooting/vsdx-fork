@@ -81,4 +81,4 @@ ignore = ["E501"]
 project-includes = ["vsdx"]
 # basic preset: the ratchet start point. Tighten per-error-config as
 # annotations improve (see roadmap).
-preset = "basic"
+preset = "strict"

@@ -14,7 +14,7 @@ class Media:
         file_path = os.sep.join(basedir.split(os.sep)[:-1])
         file_path = os.path.join(file_path, "media", "media.vsdx")
         self._media_vsdx = VisioFile(file_path)
-        self._palette_vsdx = None
+        self._palette_vsdx: VisioFile | None = None
 
     @property
     def palette(self) -> VisioFile:

@@ -6,54 +6,59 @@ from .shapes import Shape
 logger = get_logger(__name__)
 
 
-def width_x_1(shape: Shape):
+def _f(value: float | str | None) -> float:
+    """Coerce an optional cell value to float (None -> 0.0)."""
+    return float(value) if value is not None else 0.0
+
+
+def width_x_1(shape: Shape) -> float | str | None:
     return shape.width
 
 
-def width_x_0(shape: Shape):
+def width_x_0(shape: Shape) -> int:
     return 0
 
 
 def middle_x(shape: Shape):
     # (BeginX+EndX)/2
-    return (shape.begin_x + shape.end_x) / 2
+    return (_f(shape.begin_x) + _f(shape.end_x)) / 2
 
 
 def middle_y(shape: Shape):
     # (BeginY+EndY)/2
-    return (shape.begin_y + shape.end_y) / 2
+    return (_f(shape.begin_y) + _f(shape.end_y)) / 2
 
 
 def center_x(shape: Shape):
     # Width*0.5
-    return shape.width * 0.5
+    return _f(shape.width) * 0.5
 
 
 def center_y(shape: Shape):
     # Height*0.5
-    return shape.height * 0.5
+    return _f(shape.height) * 0.5
 
 
 def diag_width(shape: Shape):
     # SQRT((EndX-BeginX)^2+(EndY-BeginY)^2)
-    width = shape.end_x - shape.begin_x
-    height = shape.end_y - shape.begin_y
+    width = _f(shape.end_x) - _f(shape.begin_x)
+    height = _f(shape.end_y) - _f(shape.begin_y)
     return math.sqrt(width**2 + height**2)
 
 
 def angle(shape: Shape):
     # ATAN2(EndY-BeginY,EndX-BeginX)
-    w = shape.end_x - shape.begin_x
-    h = shape.end_y - shape.begin_y
+    w = _f(shape.end_x) - _f(shape.begin_x)
+    h = _f(shape.end_y) - _f(shape.begin_y)
     return math.atan2(w, h)
 
 
 def width(shape: Shape):
-    return shape.end_x - shape.begin_x
+    return _f(shape.end_x) - _f(shape.begin_x)
 
 
 def height(shape: Shape):
-    return shape.end_y - shape.begin_y
+    return _f(shape.end_y) - _f(shape.begin_y)
 
 
 # map func text to functions

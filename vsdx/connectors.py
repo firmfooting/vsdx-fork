@@ -11,7 +11,7 @@ from .shapes import Shape
 class Connect:
     """Connect class to represent a connection between two `Shape` objects"""
 
-    def __init__(self, xml: Element | None = None, page: vsdx.Page = None):
+    def __init__(self, xml: Element | None = None, page: "vsdx.Page | None" = None):
         if page is None:
             return
         if type(xml) is Element:  # create from xml
@@ -24,7 +24,7 @@ class Connect:
 
     @staticmethod
     def create(
-        page: vsdx.Page = None,
+        page: "vsdx.Page | None" = None,
         from_shape: Shape | None = None,
         to_shape: Shape | None = None,
         route: str = "dynamic",
@@ -41,7 +41,13 @@ class Connect:
         :returns: a new Connect object
         :rtype: Shape
         """
-        if from_shape and to_shape:  # create new connector shape and connect items between this and the two shapes
+        if page is None:
+            raise ValueError("Connect.create() requires a page")
+        if from_shape is None or to_shape is None:
+            raise ValueError("Connect.create() requires both from_shape and to_shape")
+        if (
+            from_shape is not None and to_shape is not None
+        ):  # create new connector shape and connect items between this and the two shapes
             # create new connect shape and get id
             media = vsdx.Media()
             media_shape = media.straight_connector
@@ -113,6 +119,7 @@ class Connect:
             # initial endpoints so the file renders sensibly even before Visio recalculates
             connector_shape.set_start_and_finish(from_shape.center_x_y, to_shape.center_x_y)
             return connector_shape
+        raise ValueError("Connect.create() requires both from_shape and to_shape")
 
     @staticmethod
     def _get_or_create_cell(shape: Shape, name: str, v: str | None = None, f: str | None = None):

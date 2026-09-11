@@ -20,11 +20,11 @@ shape_type_names = {  # a map from English language shape to a list of know name
 }
 
 
-def to_float(val: str):
-    """Convert a value to float or 0.0"""
+def to_float(val: str | None) -> float | None:
+    """Convert a value to float; returns None for None input."""
     try:
         if val is None:
-            return
+            return None
         return float(val)
     except ValueError:
         return 0.0
@@ -46,11 +46,11 @@ class Cell:
         self.shape = shape
 
     @property
-    def value(self):
+    def value(self) -> str | None:
         return self.xml.attrib.get("V")
 
     @value.setter
-    def value(self, value: str):
+    def value(self, value: float | str | None) -> None:
         self.xml.attrib["V"] = str(value)
 
     @property
@@ -75,6 +75,14 @@ class Cell:
 
 class DataProperty:
     """Represents a single Data Property item associated with a Shape object"""
+
+    shape: Shape
+    xml: Element
+    name: str | None
+    value_type: str | None
+    label: str | None
+    prompt: str | None
+    sort_key: str | None
 
     def __init__(self, *, xml: Element, shape: Shape):
         """init a DataProperty from a property xml element in a Shape object"""
@@ -106,7 +114,10 @@ class DataProperty:
             self.sort_key = sort_key_cell.attrib.get("V") if isinstance(sort_key_cell, Element) else None
         else:
             # over-ridden master shape properties have no label - only a name and value
-            master_props = [p for p in shape.master_shape.data_properties.values() if p.name == name]
+            master_shape = shape.master_shape
+            master_props: list[DataProperty] = (
+                [p for p in master_shape.data_properties.values() if p.name == name] if master_shape is not None else []
+            )
             if master_props:
                 # get first match 0 - there should always be one item
                 master_prop = master_props[0]  # type: DataProperty
@@ -131,14 +142,15 @@ class DataProperty:
         return value
 
     @value.setter
-    def value(self, value):
+    def value(self, value: float | str | None) -> None:
         """Set the value of the data property"""
         value_cell = self.xml.find(f'{namespace}Cell[@N="Value"]')
         if isinstance(value_cell, Element):
+            text = "" if value is None else str(value)
             if value_cell.attrib.get("V") is not None:
-                value_cell.attrib["V"] = value  # populate value in V attribute
+                value_cell.attrib["V"] = text  # populate value in V attribute
             elif value_cell.text:
-                value_cell.text = value  # populate value in element inner text
+                value_cell.text = text  # populate value in element inner text
 
     def get_attribute(self, name: str, attrib: str) -> str | None:
         """Get the attribute value of the cell element"""
@@ -171,6 +183,19 @@ class DataProperty:
 class Shape:
     """Represents a single shape, or a group shape containing other shapes"""
 
+    xml: Element
+    parent: vsdx.Page | Shape
+    tag: str
+    ID: str | None
+    master_shape_ID: str | None
+    master_page_ID: str | None
+    shape_type: str | None
+    shape_name: str | None
+    page: vsdx.Page
+    cells: dict[str, Cell]
+    geometry: vsdx.Geometry | None
+    _data_properties: dict[str, DataProperty] | None
+
     def __init__(self, xml: Element, parent: vsdx.Page | Shape, page: vsdx.Page):
         self.xml = xml
         self.parent = parent
@@ -185,11 +210,12 @@ class Shape:
         self.page = page
 
         # get Cells in Shape
-        self.cells = dict()
+        self.cells = {}
         self.geometry = None
         for e in self.xml.findall(f"{namespace}Cell"):
             cell = Cell(xml=e, shape=self)
-            self.cells[cell.name] = cell
+            if cell.name is not None:
+                self.cells[cell.name] = cell
         geometry = self.xml.find(f'{namespace}Section[@N="Geometry"]')
         if type(geometry) is Element:
             # print(f"geometry({type(geometry)}):{geometry}")
@@ -199,8 +225,8 @@ class Shape:
                 if row_type:
                     for e in r.findall(f"{namespace}Cell"):
                         cell = vsdx.Cell(xml=e, shape=self)
-                        key = f"Geometry/{row_type}/{cell.name}"
-                        self.cells[key] = cell
+                        if cell.name is not None:
+                            self.cells[f"Geometry/{row_type}/{cell.name}"] = cell
 
         control = self.xml.find(f'{namespace}Section[@N="Control"]')
         if type(control) is Element:
@@ -209,15 +235,15 @@ class Shape:
                 if row_type:
                     for e in r.findall(f"{namespace}Cell"):
                         cell = vsdx.Cell(xml=e, shape=self)
-                        key = f"Control/{row_type}/{cell.name}"
-                        self.cells[key] = cell
+                        if cell.name is not None:
+                            self.cells[f"Control/{row_type}/{cell.name}"] = cell
 
         self._data_properties = None  # internal field to hold Shape.data_propertes, set by property
 
     def __repr__(self):
         return f"<Shape tag={self.tag} ID={self.ID} is_master=({self.is_master_shape}) type={self.shape_type} text='{self.text}' >"
 
-    def __eq__(self, other: vsdx.Shape) -> bool:
+    def __eq__(self, other: object) -> bool:
         if not isinstance(other, vsdx.Shape):
             return False
 
@@ -258,20 +284,28 @@ class Shape:
 
         # parent decides where the new shape tag lands: the destination
         # page's Shapes tag, or the source shape's own parent
-        parent = page._shapes if page else self.parent
+        parent: vsdx.Page | Shape
+        if page is not None:
+            # copy_shape() above guarantees a Shapes tag exists on the page
+            page_shapes = page._shapes
+            parent = page_shapes[0] if page_shapes else page
+        else:
+            parent = self.parent
 
         return Shape(xml=new_shape_xml, parent=parent, page=dst_page)
 
     @property
-    def master_shape(self) -> Shape:
+    def master_shape(self) -> Shape | None:
         """Get this shapes master
 
         Returns this Shape's master as a Shape object (or None)
 
         """
+        if self.master_page_ID is None:
+            return None  # no master set for this Shape
         master_page = self.page.vis.get_master_page_by_id(self.master_page_ID)
         if not master_page:
-            return  # None if no master page set for this Shape
+            return None  # None if no master page set for this Shape
         master_shape = master_page.child_shapes[0]  # there's always a single master shape in a master page
 
         if self.master_shape_ID is not None:
@@ -281,12 +315,14 @@ class Shape:
         return master_shape
 
     @property
-    def master_page(self):
+    def master_page(self) -> vsdx.Page | None:
         """Get this pages master
 
         Returns this Page's master as a Page object (or None)
 
         """
+        if self.master_page_ID is None:
+            return None
         return self.page.vis.get_master_page_by_id(self.master_page_ID)
 
     @property
@@ -301,39 +337,47 @@ class Shape:
             # return cached dict if present
             return self._data_properties
 
-        properties = dict()
-        if self.master_shape:  # start with master data properties or empty dict
-            properties = self.master_shape.data_properties
+        properties: dict[str, DataProperty] = {}
+        master = self.master_shape
+        if master is not None:  # start with master data properties or empty dict
+            properties = master.data_properties
         properties_xml = self.xml.find(f'{namespace}Section[@N="Property"]')
         if type(properties_xml) is Element:
             property_rows = properties_xml.findall(f"{namespace}Row")
             for prop in property_rows:
                 data_prop = DataProperty(xml=prop, shape=self)
                 # add properties to dict to allow fast lookup by property.label
-                properties[data_prop.label] = data_prop
+                # (a property row without a Label cell keys under "")
+                properties[data_prop.label or ""] = data_prop
         self._data_properties = properties  # cache for next call
         return properties
 
     def shape_value(self, name: str):
         return self.xml.attrib.get(name, None)
 
-    def cell_value(self, name: str):
+    def cell_value(self, name: str) -> str | None:
         cell = self.cells.get(name)
         if cell:
             return cell.value
 
         if self.master_page_ID is not None:
-            return self.master_shape.cell_value(name)
+            master = self.master_shape
+            if master is not None:
+                return master.cell_value(name)
+        return None
 
-    def cell_formula(self, name: str):
+    def cell_formula(self, name: str) -> str | None:
         cell = self.cells.get(name)
         if cell:
             return cell.formula
 
         if self.master_page_ID is not None:
-            return self.master_shape.cell_formula(name)
+            master = self.master_shape
+            if master is not None:
+                return master.cell_formula(name)
+        return None
 
-    def set_cell_value(self, name: str, value: str):
+    def set_cell_value(self, name: str, value: float | str | None) -> None:
         cell = self.cells.get(name)
         if cell:  # only set value of existing item
             cell.value = value
@@ -384,7 +428,7 @@ class Shape:
         return self.xml.attrib.get("LineStyle")
 
     @line_style_id.setter
-    def line_style_id(self, value):
+    def line_style_id(self, value: str | int) -> None:
         self.xml.attrib["LineStyle"] = str(value)
 
     @property
@@ -392,7 +436,7 @@ class Shape:
         return self.xml.attrib.get("FillStyle")
 
     @fill_style_id.setter
-    def fill_style_id(self, value):
+    def fill_style_id(self, value: str | int) -> None:
         self.xml.attrib["FillStyle"] = str(value)
 
     @property
@@ -400,11 +444,11 @@ class Shape:
         return self.xml.attrib.get("TextStyle")
 
     @text_style_id.setter
-    def text_style_id(self, value):
+    def text_style_id(self, value: str | int) -> None:
         self.xml.attrib["TextStyle"] = str(value)
 
     @property
-    def line_weight(self) -> float:
+    def line_weight(self) -> float | None:
         val = self.cell_value("LineWeight")
         return to_float(val)
 
@@ -413,7 +457,7 @@ class Shape:
         self.set_cell_value("LineWeight", str(value))
 
     @property
-    def line_color(self) -> str:
+    def line_color(self) -> str | None:
         return self.cell_value("LineColor")
 
     @line_color.setter
@@ -421,7 +465,7 @@ class Shape:
         self.set_cell_value("LineColor", str(value))
 
     @property
-    def fill_color(self) -> str:
+    def fill_color(self) -> str | None:
         return self.cell_value("FillForegnd")
 
     @fill_color.setter
@@ -429,7 +473,7 @@ class Shape:
         self.set_cell_value("FillForegnd", str(value))
 
     @property
-    def text_color(self):
+    def text_color(self) -> str | None:
         """Get text color of shape - returns only first color attribute if there are many"""
         char_section = self.xml.find(f'{namespace}Section[@N="Character"]')
         color_cells = char_section.findall(f'{namespace}Row/{namespace}Cell[@N="Color"]') if char_section is not None else None
@@ -437,19 +481,19 @@ class Shape:
             return color_cells[0].attrib.get("V")
 
     @text_color.setter
-    def text_color(self, value):
+    def text_color(self, value: str | int) -> None:
         """Set text color of shape - sets only first color attribute if there are many"""
         char_section = self.xml.find(f'{namespace}Section[@N="Character"]')
         color_cells = char_section.findall(f'{namespace}Row/{namespace}Cell[@N="Color"]') if char_section is not None else None
         if color_cells:
-            color_cells[0].attrib["V"] = value
+            color_cells[0].attrib["V"] = str(value)
 
     @property
     def end_arrow(self):
         return self.cell_value("EndArrow")
 
     @end_arrow.setter
-    def end_arrow(self, value):
+    def end_arrow(self, value: int) -> None:
         if value is True:
             value = 13  # 13 is standard arrow
         if value is False:
@@ -461,7 +505,7 @@ class Shape:
         return to_float(self.cell_value("PinX"))
 
     @x.setter
-    def x(self, value: float | str):
+    def x(self, value: float | str | None) -> None:
         self.set_cell_value("PinX", str(value))
 
     @property
@@ -469,7 +513,7 @@ class Shape:
         return to_float(self.cell_value("PinY"))
 
     @y.setter
-    def y(self, value: float | str):
+    def y(self, value: float | str | None) -> None:
         self.set_cell_value("PinY", str(value))
 
     @property
@@ -497,62 +541,62 @@ class Shape:
         return self.cell_formula("LocPinY")
 
     @property
-    def line_to_x(self):
+    def line_to_x(self) -> float | None:
         return to_float(self.cell_value("Geometry/LineTo/X"))
 
     @line_to_x.setter
-    def line_to_x(self, value):
+    def line_to_x(self, value: float | str | None) -> None:
         self.set_cell_value("Geometry/LineTo/X", str(value))
 
     @property
-    def line_to_y(self):
+    def line_to_y(self) -> float | None:
         return to_float(self.cell_value("Geometry/LineTo/Y"))
 
     @line_to_y.setter
-    def line_to_y(self, value):
+    def line_to_y(self, value: float | str | None) -> None:
         self.set_cell_value("Geometry/LineTo/Y", str(value))
 
     @property
-    def begin_x(self):
+    def begin_x(self) -> float | None:
         return to_float(self.cell_value("BeginX"))
 
     @begin_x.setter
-    def begin_x(self, value: float | str):
+    def begin_x(self, value: float | str | None) -> None:
         self.set_cell_value("BeginX", str(value))
 
     @property
-    def begin_y(self):
+    def begin_y(self) -> float | None:
         return to_float(self.cell_value("BeginY"))
 
     @begin_y.setter
-    def begin_y(self, value: float | str):
+    def begin_y(self, value: float | str | None) -> None:
         self.set_cell_value("BeginY", str(value))
 
     @property
-    def end_x(self):
+    def end_x(self) -> float | None:
         return to_float(self.cell_value("EndX"))
 
     @end_x.setter
-    def end_x(self, value: float | str):
+    def end_x(self, value: float | str | None) -> None:
         self.set_cell_value("EndX", str(value))
 
     @property
-    def end_y(self):
+    def end_y(self) -> float | None:
         return to_float(self.cell_value("EndY"))
 
     @end_y.setter
-    def end_y(self, value: float | str):
+    def end_y(self, value: float | str | None) -> None:
         self.set_cell_value("EndY", str(value))
 
-    def move(self, x_delta: float, y_delta: float):
+    def move(self, x_delta: float, y_delta: float) -> None:
         if self.geometry:
             self.geometry.move(x_delta, y_delta)
-        if self.begin_x:
+        if self.begin_x is not None:
             self.begin_x = self.begin_x + x_delta
-        self.x = self.x + x_delta
-        if self.begin_y:
+        self.x = (self.x or 0.0) + x_delta
+        if self.begin_y is not None:
             self.begin_y = self.begin_y + y_delta
-        self.y = self.y + y_delta
+        self.y = (self.y or 0.0) + y_delta
 
     def get_or_create_cell(self, name: str, v: str | None = None, f: str | None = None) -> vsdx.Cell:
         """Set or create a named cell on this shape.
@@ -589,7 +633,7 @@ class Shape:
         return cell
 
     @property
-    def height(self):
+    def height(self) -> float | None:
         return to_float(self.cell_value("Height"))
 
     @height.setter
@@ -597,7 +641,7 @@ class Shape:
         self.set_cell_value("Height", str(value))
 
     @property
-    def width(self):
+    def width(self) -> float | None:
         return to_float(self.cell_value("Width"))
 
     @width.setter
@@ -609,27 +653,27 @@ class Shape:
         return to_float(self.cell_value("Angle"))
 
     @angle.setter
-    def angle(self, value: float | str):
+    def angle(self, value: float | str | None) -> None:
         self.set_cell_value("Angle", str(value))
 
     @property
-    def bounds(self) -> tuple:
+    def bounds(self) -> tuple[float, float, float, float]:
         # get absolute bounds of a shape relative to page
         s = self
         if s.begin_x is None and s.x is None and s.loc_x is None:
-            return 0, 0, 0, 0  # shape has no bounds
-        bx = s.begin_x or (s.x - s.loc_x)
-        by = s.begin_y or (s.y - s.loc_y)
-        ex = s.end_x or (bx + s.width)
-        ey = s.end_y or (by + s.height)
+            return 0.0, 0.0, 0.0, 0.0  # shape has no bounds
+        bx = s.begin_x if s.begin_x is not None else (s.x or 0.0) - (s.loc_x or 0.0)
+        by = s.begin_y if s.begin_y is not None else (s.y or 0.0) - (s.loc_y or 0.0)
+        ex = s.end_x if s.end_x is not None else bx + (s.width or 0.0)
+        ey = s.end_y if s.end_y is not None else by + (s.height or 0.0)
 
         return bx, by, ex, ey
 
     @property
-    def relative_bounds(self):
+    def relative_bounds(self) -> tuple[float, float, float, float]:
         # get bounds of a shape relative to it's parent (if shape has a parent)
         bx, by, ex, ey = self.bounds
-        if self.parent and self.parent.shape_type == "Group":
+        if isinstance(self.parent, Shape) and self.parent.shape_type == "Group":
             pbx, pby, _pex, _pey = self.parent.bounds
             bx += pbx
             by += pby
@@ -639,16 +683,18 @@ class Shape:
         return bx, by, ex, ey
 
     @property
-    def center_x_y(self):
+    def center_x_y(self) -> tuple[float | None, float | None]:
         if self.begin_x is not None:
-            x = self.begin_x + (self.width / 2)
-            y = self.begin_y + (self.height / 2)
+            x = self.begin_x + ((self.width or 0.0) / 2)
+            y = (self.begin_y or 0.0) + ((self.height or 0.0) / 2)
         else:
             x = self.x
             y = self.y
         return x, y
 
-    def set_start_and_finish(self, start, finish):
+    def set_start_and_finish(
+        self, start: tuple[float | None, float | None], finish: tuple[float | None, float | None]
+    ) -> None:
         # set start and finish of a simple line or connector
         if self.begin_x is not None:  # only apply changes to lines and connector shapes
             self.x, self.y = start
@@ -658,19 +704,21 @@ class Shape:
 
             self.begin_x, self.begin_y = start
             self.end_x, self.end_y = finish
-            self.width = self.end_x - self.begin_x
+            self.width = (self.end_x or 0.0) - (self.begin_x or 0.0)
             if is_connector:
-                self.height = self.end_y - self.begin_y  # connector has a height, where a Line does not
+                self.height = (self.end_y or 0.0) - (self.begin_y or 0.0)  # connector has a height, where a Line does not
             else:
                 self.height = 0.0  # line height is always zero
             self.x, self.y = start
-            self.geometry.set_move_to(0.0, 0.0)
-            self.geometry.set_line_to(self.width, self.height)
+            if self.geometry is not None:
+                self.geometry.set_move_to(0.0, 0.0)
+                self.geometry.set_line_to(self.width, self.height)
             txt_pin_x = self.cells.get("TxtPinX")
             txt_pin_y = self.cells.get("TxtPinY")
             if txt_pin_x and txt_pin_y:
                 if is_connector:
-                    txt_pin_x.value, txt_pin_y.value = self.width / 2, self.height / 2
+                    txt_pin_x.value = (self.width or 0.0) / 2
+                    txt_pin_y.value = (self.height or 0.0) / 2
                 else:
                     txt_pin_x.value, txt_pin_y.value = self.center_x_y
                 self.set_cell_value(name="Control/TextPosition/X", value=txt_pin_x.value)
@@ -678,17 +726,22 @@ class Shape:
                 self.set_cell_value(name="Control/TextPosition/XDyn", value=txt_pin_x.value)
                 self.set_cell_value(name="Control/TextPosition/YDyn", value=txt_pin_y.value)
                 # print(cp1.cells.keys())
-            cells = list(self.cells.values()) + self.geometry.cells
-            for r in self.geometry.rows.values():
-                cells.extend(r.cells.values())
+            cells: list[Cell | vsdx.GeometryCell] = list(self.cells.values())
+            if self.geometry is not None:
+                cells.extend(self.geometry.cells)
+                for r in self.geometry.rows.values():
+                    cells.extend(r.cells.values())
             # print(cells)
             for c in cells:  # type: Cell
                 v = None
                 formula = c.formula
-                if formula:
-                    if formula == "Inh" and self.master_shape:
-                        master_c = self.master_shape.cells.get(c.name)
+                if formula and c.name is not None:
+                    master = self.master_shape
+                    if formula == "Inh" and master is not None:
+                        master_c = master.cells.get(c.name)
                         formula = master_c.formula if master_c else formula
+                    if formula is None:
+                        continue
                     v = vsdx.calc_value(self, formula)
                     if v is not None:
                         c.value = v
@@ -700,13 +753,18 @@ class Shape:
 
         if isinstance(text_element, Element):
             return (text_element.text or "") + "".join(html.unescape(ET.tostring(e, encoding="unicode")) for e in text_element)
-        elif self.master_page_ID and self.master_shape and self.master_shape.text:
-            return self.master_shape.text  # get text from master shape
+        elif self.master_page_ID:
+            master = self.master_shape
+            if master is not None and master.text:
+                return master.text  # get text from master shape
         return ""
 
     @property
-    def _text_master_tag_groupdict(self):
-        return master_re.match(self.text_raw).groupdict()
+    def _text_master_tag_groupdict(self) -> dict[str, str]:
+        match = master_re.match(self.text_raw)
+        if match is None:  # the pattern is anchored and always matches; safety net
+            return {"prefix": "", "content": self.text_raw, "suffix": ""}
+        return match.groupdict()
 
     @property
     def _text_master_tag_pre(self) -> str:
@@ -717,11 +775,11 @@ class Shape:
         return self._text_master_tag_groupdict["suffix"]
 
     @property
-    def text(self):
+    def text(self) -> str:
         return self._text_master_tag_groupdict["content"]
 
     @text.setter
-    def text(self, value):
+    def text(self, value: str) -> None:
         _value = self._text_master_tag_pre + value + self._text_master_tag_post
         tag = f"{namespace}Text"
         text_element = self.xml.find(tag)
@@ -758,10 +816,9 @@ class Shape:
 
         parent_element = self.xml.find(f"{namespace}Shapes") if self.shape_type == "Group" else self.xml
 
+        shapes: list[Shape] = []
         if isinstance(parent_element, Element):
             shapes = [Shape(xml=shape, parent=self, page=self.page) for shape in parent_element.findall(f"{namespace}Shape")]
-        else:
-            shapes = []
 
         return shapes
 
@@ -782,8 +839,8 @@ class Shape:
                     shapes.extend(found)
         return shapes
 
-    def get_max_id(self):
-        max_id = int(self.ID)
+    def get_max_id(self) -> int:
+        max_id = int(self.ID) if self.ID is not None else 0
         if self.shape_type == "Group":
             for shape in self.child_shapes:
                 new_max = shape.get_max_id()
@@ -791,7 +848,7 @@ class Shape:
                     max_id = new_max
         return max_id
 
-    def find_shape_by_id(self, shape_id: str) -> Shape:  # returns Shape
+    def find_shape_by_id(self, shape_id: str) -> Shape | None:  # returns Shape or None
         """
         Recursively search for a shape, based on a known shape_id, and return a single Shape
 
@@ -807,7 +864,7 @@ class Shape:
         # recursively search for shapes by ID and return all matches
         return [s for s in self.all_shapes if shape_id == s.ID]
 
-    def find_shape_by_attr(self, attr: str, attr_value: str) -> Shape:  # returns Shape
+    def find_shape_by_attr(self, attr: str, attr_value: str) -> Shape | None:  # returns Shape or None
         """
         Search for a shape, based on attribute name and value, and return a single Shape
 
@@ -825,7 +882,7 @@ class Shape:
         # recursively search for shapes by master ID and return all matches
         return [s for s in self.all_shapes if s.master_shape_ID == master_shape_ID and s.master_page_ID == master_page_ID]
 
-    def find_shape_by_text(self, text: str) -> Shape:  # returns Shape
+    def find_shape_by_text(self, text: str) -> Shape | None:  # returns Shape or None
         # recursively search for shapes by text and return first match
         for shape in self.all_shapes:  # type: Shape
             if text in shape.text:
@@ -839,7 +896,7 @@ class Shape:
         # recursively search for shapes by regex and return all matches
         return [shape for shape in self.all_shapes if re.search(regex, shape.text)]
 
-    def find_shape_by_property_label(self, property_label: str) -> Shape:  # returns Shape
+    def find_shape_by_property_label(self, property_label: str) -> Shape | None:  # returns Shape or None
         # recursively search for shapes by property name and return first match
         for shape in self.all_shapes:  # type: Shape
             if property_label in shape.data_properties:
@@ -849,7 +906,9 @@ class Shape:
         # recursively search for shapes by property label and return all matches
         return [s for s in self.all_shapes if property_label in s.data_properties]
 
-    def find_shape_by_property_label_value(self, property_label: str, property_value: str) -> Shape:  # returns Shape
+    def find_shape_by_property_label_value(
+        self, property_label: str, property_value: str
+    ) -> Shape | None:  # returns Shape or None
         # recursively search for shapes by property label and value, and return first match
         for shape in self.all_shapes:  # type: Shape
             if property_label in shape.data_properties and str(shape.data_properties[property_label].value) == property_value:
@@ -865,7 +924,7 @@ class Shape:
             if property_label in s.data_properties and str(s.data_properties[property_label].value) == property_value
         ]
 
-    def apply_text_filter(self, context: dict):
+    def apply_text_filter(self, context: dict[str, object]) -> None:
         # check text against all context keys
         text = self.text
         for key in context:
@@ -884,8 +943,11 @@ class Shape:
         for s in self.child_shapes:
             s.find_replace(old, new)
 
-    def remove(self):
-        self.parent.xml.remove(self.xml)
+    def remove(self) -> None:
+        parent_xml = self.parent.xml
+        root = parent_xml.getroot() if isinstance(parent_xml, ET.ElementTree) else parent_xml
+        if root is not None:
+            root.remove(self.xml)
 
     def append_shape(self, append_shape: Shape):
         # insert shape into shapes tag, and return updated shapes tag
@@ -903,12 +965,21 @@ class Shape:
         return connects
 
     @property
-    def connected_shapes(self):
-        # return a list of connected shapes
-        shapes = list()
+    def connected_shapes(self) -> list[Shape]:
+        """Shapes at the far end of this shape's connector records.
+
+        Connect records can reference a shape that is not on this page (for
+        example a connector record left behind by a deleted shape), so lookups
+        that resolve to nothing are skipped rather than held as None.
+        """
+        shapes: list[Shape] = []
         for c in self.connects:
             if c.connector_shape_id != self.ID:
-                shapes.append(self.page.find_shape_by_id(c.connector_shape_id))
+                found = self.page.find_shape_by_id(c.connector_shape_id or "")
+                if found is not None:
+                    shapes.append(found)
             if c.shape_id != self.ID:
-                shapes.append(self.page.find_shape_by_id(c.shape_id))
+                found = self.page.find_shape_by_id(c.shape_id or "")
+                if found is not None:
+                    shapes.append(found)
         return shapes
