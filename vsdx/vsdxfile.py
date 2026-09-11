@@ -224,7 +224,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
 
         master_rels_data = file_to_xml(master_rel_path, self.zip_file_contents)
         # a document with no masters has no rels part: iterate an empty list
-        master_rels = list(master_rels_data.getroot()) if master_rels_data is not None else []
+        master_rels: list[Element] = list(master_rels_data.getroot()) if master_rels_data is not None else []
         if self.debug:
             logger.debug("Master Relationships(%s)\n%s", master_rel_path, master_rels)
 
@@ -381,8 +381,8 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
 
         return max_page_id
 
-    def _get_index(self, *, index: int, page: Page | None):
-        if type(index) is PagePosition:  # only update index if it is relative to source page
+    def _get_index(self, *, index: int | PagePosition, page: Page | None) -> int:
+        if isinstance(index, PagePosition):  # only update index if it is relative to source page
             if index == PagePosition.LAST:
                 index = len(self.pages)
             elif index == PagePosition.FIRST:
@@ -595,7 +595,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         page_dir = f"{self.directory}/visio/pages/"  # TODO: better concatenation
 
         # create pageX.xml
-        new_page_xml = ET.ElementTree(ET.fromstring(new_page_xml_str))
+        new_page_xml: ET.ElementTree[ET.Element] = ET.ElementTree(ET.fromstring(new_page_xml_str))
         new_page_filename = f"page{len(self.pages) + 1}.xml"
         new_page_path = page_dir + new_page_filename  # TODO: better concatenation
 
@@ -696,7 +696,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
 
         return self.add_page_at(PagePosition.LAST, name)
 
-    def copy_page(self, page: Page, *, index: int | None = PagePosition.AFTER, name: str | None = None) -> Page:
+    def copy_page(self, page: Page, *, index: int | PagePosition = PagePosition.AFTER, name: str | None = None) -> Page:
         """Copy an existing page and insert in VisioFile
 
         :param page: the page to copy
@@ -736,7 +736,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
             new_page_xml_str=ET.tostring(require_element(page.xml.getroot(), "page root"), encoding="unicode"),
             page_name=new_page_name,
             new_page_element=new_page_element,
-            index=self._get_index(index=index, page=page),
+            index=index,
             source_page=page,
         )
 
@@ -940,7 +940,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         element.attrib["ID"] = str(max_id)
         return max_id  # return new id for info
 
-    def update_ids(self, shape: Element, id_map: dict[str, int]) -> None:
+    def update_ids(self, shape: Element, id_map: dict[str, int]) -> Element:
         # update: <ns0:Cell F="Sheet.15! replacing 15 with new id using prepopulated id_map
         # cycle through shapes looking for Cell tag inside a Shape tag, which may be inside a Shapes tag
         for e in shape.findall(f"{namespace}Shapes"):

@@ -18,13 +18,11 @@ cont_types_namespace = "{http://schemas.openxmlformats.org/package/2006/content-
 # Ref: https://docs.microsoft.com/en-us/office/client-developer/visio/visio-file-format-reference
 
 
-def pretty_print_element(xml: Element) -> str:
-    if type(xml) is Element:
-        return minidom.parseString(ET.tostring(xml)).toprettyxml()
-    elif type(xml) is ET.ElementTree:
-        return minidom.parseString(ET.tostring(xml.getroot())).toprettyxml()
-    else:
-        return f"Not an Element. type={type(xml)}"
+def pretty_print_element(xml: Element | ET.ElementTree) -> str:
+    if isinstance(xml, ET.ElementTree):
+        root = xml.getroot()
+        return minidom.parseString(ET.tostring(root) if root is not None else b"").toprettyxml()
+    return minidom.parseString(ET.tostring(xml)).toprettyxml()
 
 
 __version__ = "0.6.3"

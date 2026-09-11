@@ -14,14 +14,14 @@ def file_to_xml(filename: str, zip_file_contents: dict[str, io.BytesIO]) -> ET.E
     return None
 
 
-def xml_to_file(xml: "ET.ElementTree[ET.Element]", filename: str, zip_file_contents: dict[str, io.BytesIO]) -> None:
+def xml_to_file(xml: ET.ElementTree[ET.Element], filename: str, zip_file_contents: dict[str, io.BytesIO]) -> None:
     """Save an ElementTree to zip_file_contents."""
     file: io.BytesIO = io.BytesIO()
     xml.write(file, xml_declaration=True, method="xml", encoding="UTF-8")
     zip_file_contents[filename] = io.BytesIO(file.getvalue())
 
 
-def require_tree(tree: "ET.ElementTree[ET.Element] | None", description: str) -> "ET.ElementTree[ET.Element]":
+def require_tree(tree: ET.ElementTree[ET.Element] | None, description: str) -> ET.ElementTree[ET.Element]:
     """A required in-memory ElementTree (already parsed from the package)."""
     if tree is None:
         raise ValueError(f"expected document part not found: {description}")

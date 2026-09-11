@@ -62,9 +62,9 @@ class Connect:
             new_master_id = None
             if not masters_rel_present:
                 # document has no masters at all: copy the media masters folder
-                for file_name, file in media._media_vsdx.zip_file_contents.items():
-                    if file_name.startswith(media._media_vsdx._masters_folder):
-                        new_file_name = file_name.replace(media._media_vsdx._masters_folder, page.vis._masters_folder)
+                for file_name, file in media.media.zip_file_contents.items():
+                    if file_name.startswith(media.media._masters_folder):
+                        new_file_name = file_name.replace(media.media._masters_folder, page.vis._masters_folder)
                         page.vis.zip_file_contents[new_file_name] = file
                 page.vis.load_master_pages()  # load copied master page files into VisioFile object
                 # document-level masters relationship
@@ -102,14 +102,18 @@ class Connect:
 
             # TitlesOfParts entry for the master name (app.xml 'Masters' count
             # is deliberately not written: real Visio packages omit it)
-            if connector_shape.shape_name not in page.vis._titles_of_parts_list():
-                page.vis._add_titles_of_parts_item(connector_shape.shape_name)
+            shape_name = connector_shape.shape_name
+            if shape_name and shape_name not in page.vis._titles_of_parts_list():
+                page.vis._add_titles_of_parts_item(shape_name)
 
             # copy style used by new connector shape
-            if not isinstance(page.vis._get_style_by_id(connector_shape.master_shape.line_style_id), Element):
+            master_shape = connector_shape.master_shape
+            line_style_id = master_shape.line_style_id if master_shape is not None else None
+            if line_style_id is not None and not isinstance(page.vis._get_style_by_id(line_style_id), Element):
                 # assume same if is ok, todo: use names for match and increment IDs
-                media_style = media._media_vsdx._get_style_by_id(connector_shape.master_shape.line_style_id)
-                page.vis._style_sheets().append(media_style)
+                media_style = media.media._get_style_by_id(line_style_id)
+                if media_style is not None:
+                    page.vis._style_sheets().append(media_style)
             media.close()
 
             # wire glue to the from/to shapes (Visio-faithful formulas, see
@@ -243,12 +247,14 @@ class Connect:
         current_from_cp = current_to_cp = 0
         for connect in page.connects:
             if connect.from_id == str(connector_shape.ID):
+                # note: deliberately not named to_shape - that is the parameter
+                connected_shape = page.find_shape_by_id(connect.to_id) if connect.to_id else None
                 if connect.from_rel == "BeginX":
-                    current_from = page.find_shape_by_id(connect.to_id)
+                    current_from = connected_shape
                     if connect.to_rel and connect.to_rel.startswith("Connections"):
                         current_from_cp = int(connect.to_rel.rsplit(".", 1)[1]) - 1
                 elif connect.from_rel == "EndX":
-                    current_to = page.find_shape_by_id(connect.to_id)
+                    current_to = connected_shape
                     if connect.to_rel and connect.to_rel.startswith("Connections"):
                         current_to_cp = int(connect.to_rel.rsplit(".", 1)[1]) - 1
         new_from = from_shape if from_shape is not None else current_from
@@ -256,7 +262,7 @@ class Connect:
         if new_from is None or new_to is None:
             raise ValueError("connector has no resolvable endpoints to keep")
 
-        page.remove_connect_records([connector_shape.ID])
+        page.remove_connect_records({str(connector_shape.ID)})
         Connect._apply_glue(
             connector_shape,
             new_from,
@@ -274,8 +280,8 @@ class Connect:
         return self.to_id
 
     @property
-    def shape(self) -> Shape:
-        return self.page.find_shape_by_id(self.shape_id)
+    def shape(self) -> Shape | None:
+        return self.page.find_shape_by_id(self.shape_id) if self.shape_id else None
 
     @property
     def connector_shape_id(self):
@@ -283,8 +289,8 @@ class Connect:
         return self.from_id
 
     @property
-    def connector_shape(self) -> Shape:
-        return self.page.find_shape_by_id(self.connector_shape_id)
+    def connector_shape(self) -> Shape | None:
+        return self.page.find_shape_by_id(self.connector_shape_id) if self.connector_shape_id else None
 
     def __repr__(self):
         return f"Connect: from={self.from_id} to={self.to_id} connector_id={self.connector_shape_id} shape_id={self.shape_id}"
