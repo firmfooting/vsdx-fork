@@ -29,8 +29,8 @@ def test_connect_shapes_dynamic_glue_formulas():
         beg_trigger = connector.cells.get('BegTrigger')
         end_trigger = connector.cells.get('EndTrigger')
         assert beg_trigger is not None and end_trigger is not None
-        assert beg_trigger.formula == '_XFTRIGGER(Sheet{}!EventXFMod)'.format(a.ID)
-        assert end_trigger.formula == '_XFTRIGGER(Sheet{}!EventXFMod)'.format(b.ID)
+        assert beg_trigger.formula == f'_XFTRIGGER(Sheet{a.ID}!EventXFMod)'
+        assert end_trigger.formula == f'_XFTRIGGER(Sheet{b.ID}!EventXFMod)'
 
         walkglue_begin = '_WALKGLUE(BegTrigger,EndTrigger,WalkPreference)'
         walkglue_end = '_WALKGLUE(EndTrigger,BegTrigger,WalkPreference)'
@@ -100,8 +100,8 @@ def test_connector_round_trip_and_zip_validity():
             page = vis2.pages[0]
             reopened = page.find_shape_by_id(str(conn_id))
             assert reopened is not None
-            assert reopened.cells['BegTrigger'].formula == '_XFTRIGGER(Sheet{}!EventXFMod)'.format(a.ID)
-            assert reopened.cells['EndTrigger'].formula == '_XFTRIGGER(Sheet{}!EventXFMod)'.format(b.ID)
+            assert reopened.cells['BegTrigger'].formula == f'_XFTRIGGER(Sheet{a.ID}!EventXFMod)'
+            assert reopened.cells['EndTrigger'].formula == f'_XFTRIGGER(Sheet{b.ID}!EventXFMod)'
             assert reopened.cells['ShapeRouteStyle'].value == '17'
 
 

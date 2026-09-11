@@ -1,12 +1,13 @@
 """Tests for Shape class"""
 import os
+
 import pytest
 
 import vsdx
-from vsdx import DataProperty
-from vsdx import Page  # for typing
-from vsdx import Shape
-from vsdx import VisioFile
+from vsdx import (
+    DataProperty,
+    VisioFile,
+)
 
 # code to get basedir of this test file in either linux/windows
 basedir = os.path.dirname(os.path.relpath(__file__))
@@ -55,7 +56,7 @@ def test_get_shape_attr_value(filename: str, attr: str, attr_value: str, expecte
         page = vis.get_page(0)  # type: Page
         shape = page.find_shape_by_attr(attr, attr_value)
         # check that shape has expected text
-        assert shape.ID == expected_id
+        assert expected_id == shape.ID
 
 
 @pytest.mark.parametrize("filename, shape_id, child_count", [
@@ -343,7 +344,7 @@ def test_set_shape_data_properties(filename: str, page_index: int, shape_name: s
         props = shape.data_properties
 
         # check each key/value is not already set to required value
-        for property_label in property_dict.keys():
+        for property_label in property_dict:
             prop = props[property_label]
             print(f"prop: lbl:'{prop.label}' name:'{prop.name}': val:'{prop.value}'")
             assert prop.value != property_dict.get(property_label)
@@ -351,7 +352,7 @@ def test_set_shape_data_properties(filename: str, page_index: int, shape_name: s
             print(vis.pretty_print_element(shape.xml))
 
         # check each key/value is expected after being set
-        for property_label in property_dict.keys():
+        for property_label in property_dict:
             prop = props[property_label]
             prop.value = property_dict.get(property_label)
             print(f"checking prop after set: lbl:'{prop.label}' name:'{prop.name}': val:'{prop.value}'")
@@ -363,7 +364,7 @@ def test_set_shape_data_properties(filename: str, page_index: int, shape_name: s
     with VisioFile(out_file) as vis:
         shape = vis.pages[page_index].find_shape_by_text(shape_name)  # type: Shape
         # check each key/value is not already set to required value
-        for property_label in property_dict.keys():
+        for property_label in property_dict:
             prop = props[property_label]
             print(f"checking prop after load: lbl:'{prop.label}' name:'{prop.name}': val:'{prop.value}'")
             assert prop.value == property_dict.get(property_label)
@@ -591,7 +592,7 @@ def test_get_shape_angle(filename: str, shape_id: str, expected_angle: float):
 @pytest.mark.parametrize(("filename", "regex", "expected_shape_ids"),
                          [
                              ('test1.vsdx', r'\s(\S{2})\s', ['2', '5', '6']),
-                             
+
                           ])
 def test_find_shapes_by_regex(filename: str, regex: str, expected_shape_ids: list):
     """ Test function Shape.find_shapes_by_regex(regex: str) 

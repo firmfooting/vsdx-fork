@@ -1,22 +1,13 @@
 """Pytest Tests for VisioFile class"""
-import os
 import io
+import os
+import xml.etree.ElementTree as ET
+from xml.etree.ElementTree import Element
 
 import pytest
-from xml.etree.ElementTree import Element
-import xml.etree.ElementTree as ET
 
-from vsdx import ext_prop_namespace
-from vsdx import namespace
-from vsdx import vt_namespace
-
-from vsdx import Media
-from vsdx import Page
-from vsdx import PagePosition
-from vsdx import Shape
-from vsdx import VisioFile
+from vsdx import Media, PagePosition, VisioFile, ext_prop_namespace, namespace, vt_namespace
 from vsdx.vsdxfile import file_to_xml
-
 
 # code to get basedir of this test file in either linux/windows
 basedir = os.path.dirname(os.path.relpath(__file__))

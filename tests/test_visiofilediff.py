@@ -1,10 +1,10 @@
-import pprint
-import pytest
 import os
+import pprint
+
+import pytest
 
 from vsdx import VisioFile
 from vsdx.vsdxdiff import VisioFileDiff
-
 
 # code to get basedir of this test file in either linux/windows
 basedir = os.path.dirname(os.path.relpath(__file__))
