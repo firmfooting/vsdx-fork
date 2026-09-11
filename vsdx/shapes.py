@@ -171,7 +171,7 @@ class DataProperty:
 class Shape:
     """Represents a single shape, or a group shape containing other shapes
     """
-    def __init__(self, xml: Element, parent: vsdx.Page or Shape, page: vsdx.Page):
+    def __init__(self, xml: Element, parent: vsdx.Page | Shape, page: vsdx.Page):
         self.xml = xml
         self.parent = parent
         self.tag = xml.tag
@@ -413,7 +413,7 @@ class Shape:
         return to_float(val)
 
     @line_weight.setter
-    def line_weight(self, value: float or str):
+    def line_weight(self, value: float | str):
         self.set_cell_value('LineWeight', str(value))
 
     @property
@@ -465,7 +465,7 @@ class Shape:
         return to_float(self.cell_value('PinX'))
 
     @x.setter
-    def x(self, value: float or str):
+    def x(self, value: float | str):
         self.set_cell_value('PinX', str(value))
 
     @property
@@ -473,7 +473,7 @@ class Shape:
         return to_float(self.cell_value('PinY'))
 
     @y.setter
-    def y(self, value: float or str):
+    def y(self, value: float | str):
         self.set_cell_value('PinY', str(value))
 
     @property
@@ -481,7 +481,7 @@ class Shape:
         return to_float(self.cell_value('LocPinX'))
 
     @loc_x.setter
-    def loc_x(self, value: float or str):
+    def loc_x(self, value: float | str):
         self.set_cell_value('LocPinX', str(value))
 
     @property
@@ -493,7 +493,7 @@ class Shape:
         return to_float(self.cell_value('LocPinY'))
 
     @loc_y.setter
-    def loc_y(self, value: float or str):
+    def loc_y(self, value: float | str):
         self.set_cell_value('LocPinY', str(value))
 
     @property
@@ -521,7 +521,7 @@ class Shape:
         return to_float(self.cell_value('BeginX'))
 
     @begin_x.setter
-    def begin_x(self, value: float or str):
+    def begin_x(self, value: float | str):
         self.set_cell_value('BeginX', str(value))
 
     @property
@@ -529,7 +529,7 @@ class Shape:
         return to_float(self.cell_value('BeginY'))
 
     @begin_y.setter
-    def begin_y(self, value: float or str):
+    def begin_y(self, value: float | str):
         self.set_cell_value('BeginY', str(value))
 
     @property
@@ -537,7 +537,7 @@ class Shape:
         return to_float(self.cell_value('EndX'))
 
     @end_x.setter
-    def end_x(self, value: float or str):
+    def end_x(self, value: float | str):
         self.set_cell_value('EndX', str(value))
 
     @property
@@ -545,7 +545,7 @@ class Shape:
         return to_float(self.cell_value('EndY'))
 
     @end_y.setter
-    def end_y(self, value: float or str):
+    def end_y(self, value: float | str):
         self.set_cell_value('EndY', str(value))
 
     def move(self, x_delta: float, y_delta: float):
@@ -597,7 +597,7 @@ class Shape:
         return to_float(self.cell_value('Height'))
 
     @height.setter
-    def height(self, value: float or str):
+    def height(self, value: float | str):
         self.set_cell_value('Height', str(value))
 
     @property
@@ -605,7 +605,7 @@ class Shape:
         return to_float(self.cell_value('Width'))
 
     @width.setter
-    def width(self, value: float or str):
+    def width(self, value: float | str):
         self.set_cell_value('Width', str(value))
 
     @property
@@ -613,7 +613,7 @@ class Shape:
         return to_float(self.cell_value('Angle'))
 
     @angle.setter
-    def angle(self, value: float or str):
+    def angle(self, value: float | str):
         self.set_cell_value('Angle', str(value))
 
     @property

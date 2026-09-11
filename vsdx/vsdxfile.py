@@ -490,7 +490,7 @@ class VisioFile:
 
         return max_page_id
 
-    def _get_index(self, *, index: int, page: Page or None):
+    def _get_index(self, *, index: int, page: Page | None):
         if type(index) is PagePosition:  # only update index if it is relative to source page
             if index == PagePosition.LAST:
                 index = len(self.pages)
@@ -686,7 +686,7 @@ class VisioFile:
         new_page_xml_str: str,
         page_name: str,
         new_page_element: Element,
-        index: int or PagePosition,
+        index: int | PagePosition,
         source_page: Optional[Page] = None,
     ) -> Page:
         # Create visio\pages\pageX.xml file
@@ -811,7 +811,7 @@ class VisioFile:
         :param page: the page to copy
         :type page: Page
         :param index: the specific int or relation PagePosition location for new page
-        :type index: int or PagePosition
+        :type index: int | PagePosition
         :param name: name of new page (note this may be altered if name already exists)
         :type name: str
 
@@ -865,7 +865,7 @@ class VisioFile:
                     return e
 
     @staticmethod
-    def get_shape_location(shape: Element) -> (float, float):
+    def get_shape_location(shape: Element) -> tuple[float, float]:
         x, y = 0.0, 0.0
         cell_PinX = shape.find(f'{namespace}Cell[@N="PinX"]')  # type: Element
         cell_PinY = shape.find(f'{namespace}Cell[@N="PinY"]')
@@ -1014,7 +1014,7 @@ class VisioFile:
         return jinja_source_out
 
     @staticmethod
-    def jinja_create_for_loop_if(shape: Shape, previous_shape:Shape or None):
+    def jinja_create_for_loop_if(shape: Shape, previous_shape: Shape | None):
         # update a Shapes tag where text looks like a jinja {% for xxxx %} loop
         # move text to start of Shapes tag and add {% endfor %} at end of tag
         text = shape.text

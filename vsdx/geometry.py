@@ -176,7 +176,7 @@ class GeometryRow:
 
 class GeometryCell:
     """class to represent a Cell element, a name value pair. This may be a child of Geometry or of GeometryRow"""
-    def __init__(self, parent: GeometryRow or Geometry, xml: Element, name: str = None, value: str = None):
+    def __init__(self, parent: GeometryRow | Geometry, xml: Element, name: str = None, value: str = None):
         self.parent = parent
         self.parent_xml = parent.xml
         self.xml = xml if type(xml) is Element else self.create_cell_xml(name)
