@@ -107,7 +107,40 @@ result and shows the membership. **Met** (harness lanes report).
 - [ ] every WI above adds pytest cases using the com_reference fixtures
 - [ ] Visio open-check harness (`tools/visio_check.ps1`) for local ground-truth validation
 
-### WI-6 — master-import (P0) ✅ done (branch feat/master-import, upstream PR #96)
+### WI-7 — connector re-anchor (P1, next)
+
+Close the last WI-1 item: retarget an existing connector's from/to.
+
+- [ ] `Connect.retarget(page, connector_shape, from_shape, to_shape, route,
+  from_cp, to_cp)`: re-run `_apply_glue` for the new endpoints, swap the
+  page's Connect records for the connector, refresh start/finish geometry
+- [ ] `Page.reanchor_connector(...)` thin facade
+- [ ] tests: triggers + records point at the new shapes; old records gone
+
+### WI-8 — `create_shape` public API (P1)
+
+Second half of WI-3. Palette shapes are plain (masterless) by design — they
+copy across documents without master-import, so headless creation needs no
+COM and no masters.
+
+- [ ] ship the extended palette as a second media template
+  (`vsdx/media/palette_extended.vsdx`); `Media.palette` lazy accessor
+- [ ] `VisioFile.create_shape(page, palette_name, x, y, w=None, h=None,
+  text=None)`: find sentinel shape in palette, `copy_shape` into page,
+  position/size, set text (clear sentinel when text is None)
+- [ ] DRY: no new copy or id-rewrite code — reuse `copy_shape` and the
+  existing x/y/height/width setters; no second fixture copy helper
+- [ ] tests: create process/decision/database shapes, round-trip validity
+
+### Phase C — integration and fork release (P0, after WI-7/WI-8)
+
+- [ ] merge feat/swimlanes (contains the full chain) into master
+- [ ] final composite ground-truth check: palette shapes + connectors +
+  swimlane operations in ONE file, opened by real Visio
+- [ ] full suite on master; tag fork release `v0.6.2`; push master + tag
+- [ ] plan doc final status; leave upstream PRs #95/#96 pending maintainer
+
+
 
 Goal: `Connect.create()` (and any master-carrying shape copy) works on
 documents that carry their own masters. Sub-steps:
