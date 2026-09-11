@@ -1165,8 +1165,12 @@ class VisioFile:
             for cell in cells:
                 f = str(cell.attrib['F'])
                 if f.startswith("Sheet."):
-                    # update sheet refs with new ids
+                    # update sheet refs with new ids; refs outside the cloned
+                    # subtree (e.g. to the Swimlane List) are not in id_map
+                    # and must be left untouched
                     shape_id = f.split('!')[0].split('.')[1]
+                    if shape_id not in id_map:
+                        continue
                     new_id = id_map[shape_id]
                     new_f = f.replace(f"Sheet.{shape_id}",f"Sheet.{new_id}")
                     cell.attrib['F'] = new_f

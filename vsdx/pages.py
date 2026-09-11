@@ -371,6 +371,27 @@ class Page:
         return vsdx.Connect.create(page=self, from_shape=from_shape, to_shape=to_shape,
                                    route=behaviour or glue, from_cp=from_cp, to_cp=to_cp)
 
+    def get_container(self) -> vsdx.Container:
+        """Return the page's CFF Container (swimlane diagram root), or None."""
+        return vsdx.Container.find(self)
+
+    def add_swimlane(self, label: str = None) -> Shape:
+        """Add a swimlane to this page's CFF Container (clones the last lane).
+
+        :returns: the new lane Shape
+        """
+        container = self.get_container()
+        if container is None:
+            raise ValueError('page has no CFF Container')
+        return container.add_swimlane(label)
+
+    def add_shape_to_lane(self, shape: Shape, lane: Shape):
+        """Move a shape into a swimlane lane (membership is tree containment)."""
+        container = self.get_container()
+        if container is None:
+            raise ValueError('page has no CFF Container')
+        container.add_shape_to_lane(shape, lane)
+
     def delete_shape(self, shape: Shape):
         """Delete a shape from this page, removing any incident connectors.
 

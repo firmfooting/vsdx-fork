@@ -32,6 +32,7 @@ try {
             $details = @()
             foreach ($page in $doc.Pages) {
                 $oneD = @()
+                $lanes = @()
                 foreach ($shape in $page.Shapes) {
                     $hasBeginX = $false
                     try { $null = $shape.Cells('BeginX'); $hasBeginX = $true } catch { $hasBeginX = $false }
@@ -46,8 +47,14 @@ try {
                             $details += ("  page={0} conn={1} BeginX=<unreadable>" -f $page.Index, $shape.NameID)
                         }
                     }
+                    # swimlane reporting: lane shapes carry a visHeadingText User row
+                    try {
+                        $headingCell = $shape.CellsU('User.visHeadingText')
+                        $label = $headingCell.ResultStrU("")
+                        $lanes += ("{0}='{1}'" -f $shape.NameID, $label)
+                    } catch { }
                 }
-                $details += ("  page={0} name={1} shapes={2} connectors={3}" -f $page.Index, $page.Name, $page.Shapes.Count, $oneD.Count)
+                $details += ("  page={0} name={1} shapes={2} connectors={3} lanes={4}" -f $page.Index, $page.Name, $page.Shapes.Count, $oneD.Count, ($lanes -join ' '))
             }
             Write-Output ("PASS {0}: pages={1} connectors={2} walkglue={3}" -f (Split-Path $f -Leaf), $doc.Pages.Count, $totalConnectors, $walkglueCount)
             $details | ForEach-Object { Write-Output $_ }
