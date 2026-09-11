@@ -370,6 +370,11 @@ class VisioFile:
     def _add_content_types_override(self, part_name_path: str, content_type: str):
         content_types = self.content_types_xml.getroot()
 
+        # idempotent: skip if this exact PartName is already registered
+        for existing in content_types.findall(f'{cont_types_namespace}Override'):
+            if existing.attrib.get('PartName') == part_name_path:
+                return
+
         content_types_attribs = {
             'PartName': part_name_path,
             'ContentType': content_type,
@@ -410,6 +415,10 @@ class VisioFile:
         return rels
 
     def _add_document_rel(self, rel_type: str, target: str):
+        # idempotent: skip if an identical relationship already exists
+        for r in self.document_rels():
+            if r.attrib.get('Type') == rel_type and r.attrib.get('Target') == target:
+                return
         rel_ids = [int(str(r.attrib.get('Id')).replace('rId', '')) for r in self.document_rels()]
         new_rel = Element(f"{document_rels_namespace}Relationship",
                           {

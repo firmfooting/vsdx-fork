@@ -315,10 +315,62 @@ class Page:
                 return found
 
     def find_shapes_by_property_label_value(self, property_label: str, property_value: str) -> List[Shape]:
-        # return all matching shapes with property label
+        # return all matching shapes with property label and value
         shapes = list()
         for s in self._shapes:
             found = s.find_shapes_by_property_label_value(property_label, property_value)
             if found:
                 shapes.extend(found)
         return shapes
+
+    def connect_shapes(self, from_shape: Shape, to_shape: Shape, route: str = 'dynamic',
+                       from_cp: int = 0, to_cp: int = 0) -> Shape:
+        """Create a Visio-faithful dynamic connector between two shapes on this page.
+
+        route: 'dynamic' (shape glue, default), 'point' (connection-point glue
+        using from_cp/to_cp 0-based connection point indexes), optionally with
+        routing behaviour 'straight', 'rightangle' or 'curved' - e.g.
+        route='straight' or route='point|curved'.
+
+        :returns: the new connector Shape
+        :rtype: Shape
+        """
+        parts = route.split('|') if route else []
+        glue = 'point' if 'point' in parts else 'dynamic'
+        behaviour = next((p for p in parts if p in ('straight', 'rightangle', 'curved')), None)
+        return vsdx.Connect.create(page=self, from_shape=from_shape, to_shape=to_shape,
+                                   route=behaviour or glue, from_cp=from_cp, to_cp=to_cp)
+
+    def delete_shape(self, shape: Shape):
+        """Delete a shape from this page, removing any incident connectors.
+
+        Connectors whose Begin or End glue references the shape are deleted
+        first (including their Connect records), then the shape itself.
+        """
+        shape_id = str(shape.ID)
+        # connectors are the FromSheet of Connect records whose ToSheet is the
+        # doomed shape, on a begin/end relationship
+        connector_ids = {c.from_id for c in self.connects
+                         if c.to_id == shape_id and c.from_rel in ('BeginX', 'EndX')}
+        doomed = set()
+        for s in self.all_shapes:
+            sid = str(s.ID)
+            if sid == shape_id:
+                doomed.add(s)
+            elif sid in connector_ids and 'BeginX' in s.cells:
+                doomed.add(s)
+        for s in doomed:
+            self._remove_shape_xml(s)
+
+    def _remove_shape_xml(self, shape: Shape):
+        """Remove a shape's xml, its Connect records, and (if 1-D) its connectors' records."""
+        sid = str(shape.ID)
+        connects_el = self.xml.find(f'.//{namespace}Connects')
+        if connects_el is not None:
+            for connect in list(connects_el):
+                if connect.attrib.get('FromSheet') == sid or connect.attrib.get('ToSheet') == sid:
+                    connects_el.remove(connect)
+        for shapes_el in self.xml.iter(f'{namespace}Shapes'):
+            if shape.xml in list(shapes_el):
+                shapes_el.remove(shape.xml)
+                break
