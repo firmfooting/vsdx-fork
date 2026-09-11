@@ -84,13 +84,29 @@ result and shows the membership (manual COM check script provided).
 
 ### WI-6 — master-import (P0, next)
 
-Extract a working "import master into document" path so `Connect.create()`
-(and any master-based shape drop) works on documents that carry their own
-masters: copy `master<N>.xml`, update `masters.xml` (+rels), content types,
-and the page rels. Lifts the strict-xfail on the test3_house/test4 params.
-**Blocks the upstream corruption-fix PR**: the surgical dedupe-only diff
-routes own-masters documents into the broken `elif` branch (9 test failures
-on upstream's engine) — the fix must land together with master-import.
+Goal: `Connect.create()` (and any master-carrying shape copy) works on
+documents that carry their own masters. Sub-steps:
+
+- [ ] 6a ground truth: COM capture — take a doc with own masters
+  (test3_house), paste a Dynamic-connector-master shape from a corpus file,
+  save, and diff the zip (masters.xml, masters rels, content types, pasted
+  shape's Master attribute, app.xml counts)
+- [ ] 6b implement `VisioFile._ensure_master(shape) -> target_master_id`:
+  no-op when the master name exists; else copy master part under the next
+  free filename, append Master element with fresh unique ID, add masters.xml
+  rels entry, content-type override, rewrite the copied shape's Master
+  attribute, update app.xml
+- [ ] 6c rewire `Connect.create()`: replace the three-branch provisioning
+  mess with no-masters provisioning (existing path) + `_ensure_master`
+- [ ] 6d tests: lift the strict-xfails (test3_house/test4 params must pass
+  AND open in Visio); `_ensure_master` idempotency (import twice → one
+  master); multi-connector regression still green
+- [ ] 6e Visio ground-truth validation via tools/visio_check.ps1
+- [ ] 6f upstream PR: master-import + dedupe helpers + state guard, anchored
+  to upstream #93 (also closes the #77/#63 symptom class)
+
+Accept: all xfails lifted, Visio opens every generated file, upstream PR cut
+from the tested state.
 
 ## Upstream posture (decided 2026-09-11)
 
