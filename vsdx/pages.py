@@ -7,6 +7,7 @@ if TYPE_CHECKING:
     from .vsdxfile import VisioFile
 import vsdx
 
+import io
 import xml.etree.ElementTree as ET
 
 import deprecation
@@ -218,6 +219,35 @@ class Page:
 
         connects.append(connect.xml)
 
+    def _ensure_page_master_rel(self, master_rel_id: str, master_part_name: str):
+        """Ensure this page's rels reference the given master part.
+
+        Visio writes a per-page relationship to each master used by shapes on
+        that page (Target '../masters/masterN.xml'). The rels part is created
+        on demand; the filename is registered so save_vsdx persists it.
+        """
+        if self.rels_xml is None:
+            rels_filename = self.filename.replace('visio/pages/', 'visio/pages/_rels/') + '.rels'
+            self.rels_xml_filename = rels_filename
+            self.rels_xml = ET.ElementTree(ET.fromstring(
+                '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>'))
+        rels_root = self.rels_xml.getroot()
+        assert rels_root is not None
+        existing = {r.attrib.get('Target') for r in rels_root}
+        target = f'../masters/{master_part_name}'
+        if target in existing:
+            return
+        rel_element = ET.fromstring(
+            f'<Relationship xmlns="http://schemas.openxmlformats.org/package/2006/relationships" '
+            f'Type="http://schemas.microsoft.com/visio/2010/relationships/master" '
+            f'Id="{master_rel_id}" Target="{target}"/>')
+        rels_root.append(rel_element)
+        # persist into the zip contents so save picks it up even for pages
+        # that never had a rels part before
+        if self.rels_xml_filename:
+            self.vis.zip_file_contents[self.rels_xml_filename] = io.BytesIO(
+                ET.tostring(rels_root, xml_declaration=True, encoding='UTF-8'))
+
     def get_connects(self):
         elements = self.xml.findall(f".//{namespace}Connect")  # search recursively
         connects = [Connect(xml=e, page=self) for e in elements]
@@ -315,10 +345,105 @@ class Page:
                 return found
 
     def find_shapes_by_property_label_value(self, property_label: str, property_value: str) -> List[Shape]:
-        # return all matching shapes with property label
+        # return all matching shapes with property label and value
         shapes = list()
         for s in self._shapes:
             found = s.find_shapes_by_property_label_value(property_label, property_value)
             if found:
                 shapes.extend(found)
         return shapes
+
+    def connect_shapes(self, from_shape: Shape, to_shape: Shape, route: str = 'dynamic',
+                       from_cp: int = 0, to_cp: int = 0) -> Shape:
+        """Create a Visio-faithful dynamic connector between two shapes on this page.
+
+        route: 'dynamic' (shape glue, default), 'point' (connection-point glue
+        using from_cp/to_cp 0-based connection point indexes), optionally with
+        routing behaviour 'straight', 'rightangle' or 'curved' - e.g.
+        route='straight' or route='point|curved'.
+
+        :returns: the new connector Shape
+        :rtype: Shape
+        """
+        parts = route.split('|') if route else []
+        glue = 'point' if 'point' in parts else 'dynamic'
+        behaviour = next((p for p in parts if p in ('straight', 'rightangle', 'curved')), None)
+        return vsdx.Connect.create(page=self, from_shape=from_shape, to_shape=to_shape,
+                                   route=behaviour or glue, from_cp=from_cp, to_cp=to_cp)
+
+    def get_container(self) -> vsdx.Container:
+        """Return the page's CFF Container (swimlane diagram root), or None."""
+        return vsdx.Container.find(self)
+
+    def add_swimlane(self, label: str = None) -> Shape:
+        """Add a swimlane to this page's CFF Container (clones the last lane).
+
+        :returns: the new lane Shape
+        """
+        container = self.get_container()
+        if container is None:
+            raise ValueError('page has no CFF Container')
+        return container.add_swimlane(label)
+
+    def add_shape_to_lane(self, shape: Shape, lane: Shape):
+        """Move a shape into a swimlane lane (membership is tree containment)."""
+        container = self.get_container()
+        if container is None:
+            raise ValueError('page has no CFF Container')
+        container.add_shape_to_lane(shape, lane)
+
+    def reanchor_connector(self, connector_shape: Shape, from_shape: Shape = None,
+                           to_shape: Shape = None, route: str = 'dynamic',
+                           from_cp: int = 0, to_cp: int = 0) -> Shape:
+        """Retarget an existing connector to new endpoints (either end may be
+        kept by passing None).
+
+        :returns: the connector Shape
+        """
+        return vsdx.Connect.retarget(page=self, connector_shape=connector_shape,
+                                     from_shape=from_shape, to_shape=to_shape,
+                                     route=route, from_cp=from_cp, to_cp=to_cp)
+
+    def delete_shape(self, shape: Shape):
+        """Delete a shape from this page, removing any incident connectors.
+
+        Connectors whose Begin or End glue references the shape are deleted
+        first (including their Connect records), then the shape itself.
+        """
+        shape_id = str(shape.ID)
+        # connectors are the FromSheet of Connect records whose ToSheet is the
+        # doomed shape, on a begin/end relationship
+        connector_ids = {c.from_id for c in self.connects
+                         if c.to_id == shape_id and c.from_rel in ('BeginX', 'EndX')}
+        doomed = set()
+        for s in self.all_shapes:
+            sid = str(s.ID)
+            if sid == shape_id:
+                doomed.add(s)
+            elif sid in connector_ids and 'BeginX' in s.cells:
+                doomed.add(s)
+        for s in doomed:
+            self._remove_shape_xml(s)
+
+    def _remove_shape_xml(self, shape: Shape):
+        """Remove a shape's xml, its Connect records, and (if 1-D) its connectors' records."""
+        sid = str(shape.ID)
+        self.remove_connect_records({sid})
+        for shapes_el in self.xml.iter(f'{namespace}Shapes'):
+            if shape.xml in list(shapes_el):
+                shapes_el.remove(shape.xml)
+                break
+
+    def remove_connect_records(self, connector_ids):
+        """Remove all Connect records whose FromSheet is one of connector_ids.
+
+        Single record-removal path, shared by the delete cascade and
+        connector retargeting.
+        """
+        ids = {str(i) for i in connector_ids}
+        connects_el = self.xml.find(f'.//{namespace}Connects')
+        if connects_el is None:
+            return
+        for connect in list(connects_el):
+            if connect.attrib.get('FromSheet') in ids:
+                connects_el.remove(connect)
