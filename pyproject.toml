@@ -1,0 +1,84 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vsdxkit"
+description = "vsdxkit - create, edit and analyse Microsoft Visio .vsdx files, headlessly"
+readme = "README.md"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Dave Howard", email = "dave@codypy.com" },
+    { name = "Shaun Eccles" },
+]
+requires-python = ">=3.10"
+dependencies = [
+    "Jinja2",
+    "deprecation",
+]
+dynamic = ["version"]
+keywords = ["vsdx", "visio", "diagram", "flowchart", "swagger", "opcn"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Multimedia :: Graphics",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.urls]
+Homepage = "https://github.com/shauneccles/vsdx"
+Documentation = "https://vsdx.readthedocs.io/en/latest/"
+"Upstream" = "https://github.com/dave-howard/vsdx"
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "ruff",
+    "pyrefly",
+]
+
+[tool.setuptools]
+packages = ["vsdx"]
+
+[tool.setuptools.package-data]
+vsdx = ["media/*.vsdx", "py.typed"]
+
+[tool.setuptools.dynamic]
+version = { attr = "vsdx.__version__" }
+
+[tool.ruff]
+line-length = 127
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific
+]
+# E501 (line length) handled by formatter; docstring rules not adopted yet
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# tests use broad fixtures and long parametrise lines
+"tests/*" = ["SIM117"]
+
+[tool.pyrefly]
+project-includes = ["vsdx"]
+# basic preset: the ratchet start point. Tighten per-error-config as
+# annotations improve (see roadmap).
+preset = "basic"

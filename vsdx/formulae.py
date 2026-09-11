@@ -1,7 +1,7 @@
 import math
-from vsdx import Shape
 
 from .logging_support import get_logger
+from .shapes import Shape
 
 logger = get_logger(__name__)
 
@@ -38,40 +38,40 @@ def diag_width(shape: Shape):
     # SQRT((EndX-BeginX)^2+(EndY-BeginY)^2)
     width = shape.end_x - shape.begin_x
     height = shape.end_y - shape.begin_y
-    return math.sqrt(width ** 2 + height ** 2)
+    return math.sqrt(width**2 + height**2)
 
 
 def angle(shape: Shape):
     # ATAN2(EndY-BeginY,EndX-BeginX)
-    w = shape.end_x-shape.begin_x
-    h = shape.end_y-shape.begin_y
+    w = shape.end_x - shape.begin_x
+    h = shape.end_y - shape.begin_y
     return math.atan2(w, h)
 
 
 def width(shape: Shape):
-    return shape.end_x-shape.begin_x
+    return shape.end_x - shape.begin_x
 
 
 def height(shape: Shape):
-    return shape.end_y-shape.begin_y
+    return shape.end_y - shape.begin_y
 
 
 # map func text to functions
 func_map = {
-    'Width*1': width_x_1,
-    'Width*0': width_x_0,
-    '(BeginX+EndX)/2': middle_x,
-    '(BeginY+EndY)/2': middle_y,
-    'Width*0.5': center_x,
-    'Height*0.5': center_y,
-    'SQRT((EndX-BeginX)^2+(EndY-BeginY)^2)': diag_width,
-    'ATAN2(EndY-BeginY,EndX-BeginX)': angle,
-    'GUARD((BeginX+EndX)/2)': middle_x,
-    'GUARD((BeginY+EndY)/2)': middle_y,
-    'GUARD(Width*0.5)': center_x,
-    'GUARD(Height*0.5)': center_y,
-    'GUARD(EndX-BeginX)': width,
-    'GUARD(EndY-BeginY)': height,
+    "Width*1": width_x_1,
+    "Width*0": width_x_0,
+    "(BeginX+EndX)/2": middle_x,
+    "(BeginY+EndY)/2": middle_y,
+    "Width*0.5": center_x,
+    "Height*0.5": center_y,
+    "SQRT((EndX-BeginX)^2+(EndY-BeginY)^2)": diag_width,
+    "ATAN2(EndY-BeginY,EndX-BeginX)": angle,
+    "GUARD((BeginX+EndX)/2)": middle_x,
+    "GUARD((BeginY+EndY)/2)": middle_y,
+    "GUARD(Width*0.5)": center_x,
+    "GUARD(Height*0.5)": center_y,
+    "GUARD(EndX-BeginX)": width,
+    "GUARD(EndY-BeginY)": height,
 }
 
 

@@ -1,17 +1,18 @@
 import os
+
 from .vsdxfile import VisioFile
 
 
 class Media:
-    straight_connector_text = 'STRAIGHT_CONNECTOR'
-    curved_connector_text = 'CURVED_CONNECTOR'
+    straight_connector_text = "STRAIGHT_CONNECTOR"
+    curved_connector_text = "CURVED_CONNECTOR"
     rectangle_text = "RECTANGLE"
     circle_text = "CIRCLE"
 
     def __init__(self):
         basedir = str(os.path.relpath(__file__))
         file_path = os.sep.join(basedir.split(os.sep)[:-1])
-        file_path = os.path.join(file_path, 'media', 'media.vsdx')
+        file_path = os.path.join(file_path, "media", "media.vsdx")
         self._media_vsdx = VisioFile(file_path)
         self._palette_vsdx = None
 
@@ -22,8 +23,8 @@ class Media:
         PALETTE_PARALLELOGRAM, PALETTE_DATABASE)."""
         if self._palette_vsdx is None:
             file_path = os.path.join(
-                os.sep.join(str(os.path.relpath(__file__)).split(os.sep)[:-1]),
-                'media', 'palette_extended.vsdx')
+                os.sep.join(str(os.path.relpath(__file__)).split(os.sep)[:-1]), "media", "palette_extended.vsdx"
+            )
             self._palette_vsdx = VisioFile(file_path)
         return self._palette_vsdx
 

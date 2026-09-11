@@ -16,30 +16,30 @@ Model (verified against the capture):
 - User rows are stored as ``<Section N='User'><Row N='name'>`` which is NOT
   the same as plain ``<Cell N='...'>`` cells; helpers here handle both
 """
+
 from __future__ import annotations
 
-from typing import List, Optional
-
 import vsdx
+
 from .shapes import Shape
 
 # observed lane pitch in the Visio 16 CFF capture (inches)
 LANE_PITCH_INCHES = 1.18110236220472
 
 # User-section row names written by Visio on lane shapes
-ROW_HEADING_TEXT = 'visHeadingText'
-ROW_SWIMLANE_GUID = 'SwimlaneListGUID'
+ROW_HEADING_TEXT = "visHeadingText"
+ROW_SWIMLANE_GUID = "SwimlaneListGUID"
 
 # top-level shape NameU values of the CFF machinery (excluded from membership)
-_CFF_MACHINERY = ('CFF Container', 'Swimlane List', 'Phase List', 'Separator')
+_CFF_MACHINERY = ("CFF Container", "Swimlane List", "Phase List", "Separator")
 
 
 def get_user_row(shape: Shape, name: str):
     """Return the ``<Row N=name>`` element of the shape's User section, or None."""
-    for section in shape.xml.findall(f'{vsdx.namespace}Section'):
-        if section.attrib.get('N') == 'User':
-            for row in section.findall(f'{vsdx.namespace}Row'):
-                if row.attrib.get('N') == name:
+    for section in shape.xml.findall(f"{vsdx.namespace}Section"):
+        if section.attrib.get("N") == "User":
+            for row in section.findall(f"{vsdx.namespace}Row"):
+                if row.attrib.get("N") == name:
                     return row
     return None
 
@@ -50,9 +50,9 @@ def set_user_row_value(shape: Shape, name: str, value: str) -> bool:
     row = get_user_row(shape, name)
     if row is None:
         return False
-    for cell in row.findall(f'{vsdx.namespace}Cell'):
-        if cell.attrib.get('N') == 'Value':
-            cell.attrib['V'] = value
+    for cell in row.findall(f"{vsdx.namespace}Cell"):
+        if cell.attrib.get("N") == "Value":
+            cell.attrib["V"] = value
             return True
     return False
 
@@ -65,46 +65,48 @@ class Container:
     behaviour. There are no membership cells to write.
     """
 
-    def __init__(self, page: 'vsdx.Page'):
+    def __init__(self, page: vsdx.Page):
         self.page = page
 
     # ---- discovery -------------------------------------------------------
 
     @staticmethod
-    def find(page: 'vsdx.Page') -> Optional['Container']:
+    def find(page: vsdx.Page) -> Container | None:
         """Return a Container for the page, or None if this is not a CFF page."""
         for shape in page.all_shapes:
-            if shape.shape_name == 'CFF Container':
+            if shape.shape_name == "CFF Container":
                 return Container(page)
         return None
 
-    def _top_level_named(self, name_prefix: str) -> List[Shape]:
-        shapes_tag = self.page.xml.find(f'{vsdx.namespace}Shapes')
+    def _top_level_named(self, name_prefix: str) -> list[Shape]:
+        shapes_tag = self.page.xml.find(f"{vsdx.namespace}Shapes")
         if shapes_tag is None:
             return []
         result = []
-        for el in shapes_tag.findall(f'{vsdx.namespace}Shape'):
-            name = el.attrib.get('NameU') or el.attrib.get('Name') or ''
+        for el in shapes_tag.findall(f"{vsdx.namespace}Shape"):
+            name = el.attrib.get("NameU") or el.attrib.get("Name") or ""
             if name.startswith(name_prefix):
                 result.append(Shape(xml=el, parent=self.page, page=self.page))
         return result
 
     @property
-    def container_shape(self) -> Optional[Shape]:
-        matches = self._top_level_named('CFF Container')
+    def container_shape(self) -> Shape | None:
+        matches = self._top_level_named("CFF Container")
         return matches[0] if matches else None
 
     @property
-    def swimlane_list(self) -> Optional[Shape]:
-        matches = self._top_level_named('Swimlane List')
+    def swimlane_list(self) -> Shape | None:
+        matches = self._top_level_named("Swimlane List")
         return matches[0] if matches else None
 
     @property
-    def lanes(self) -> List[Shape]:
+    def lanes(self) -> list[Shape]:
         """Lane shapes in visual order, top lane first."""
-        lanes = [s for s in self._top_level_named('Swimlane')
-                 if s.shape_name and s.shape_name.startswith('Swimlane')
-                 and not s.shape_name.startswith('Swimlane List')]
+        lanes = [
+            s
+            for s in self._top_level_named("Swimlane")
+            if s.shape_name and s.shape_name.startswith("Swimlane") and not s.shape_name.startswith("Swimlane List")
+        ]
         lanes.sort(key=lambda s: -s.y)  # top-to-bottom
         return lanes
 
@@ -116,7 +118,7 @@ class Container:
         height = lane.height or LANE_PITCH_INCHES
         return lane.y - height / 2, lane.y + height / 2
 
-    def lane_of(self, shape: Shape) -> Optional[Shape]:
+    def lane_of(self, shape: Shape) -> Shape | None:
         """The lane whose band contains the shape's centre, or None."""
         for lane in self.lanes:
             bottom, top = self.lane_band(lane)
@@ -124,15 +126,15 @@ class Container:
                 return lane
         return None
 
-    def members(self, lane: Shape) -> List[Shape]:
+    def members(self, lane: Shape) -> list[Shape]:
         """Flowchart shapes whose centre lies in the lane's band."""
         bottom, top = self.lane_band(lane)
         result = []
-        for shape in self._top_level_named(''):  # all top-level shapes
-            name = shape.shape_name or ''
-            if name.startswith(_CFF_MACHINERY) or name.startswith('Swimlane'):
+        for shape in self._top_level_named(""):  # all top-level shapes
+            name = shape.shape_name or ""
+            if name.startswith(_CFF_MACHINERY) or name.startswith("Swimlane"):
                 continue
-            if 'BeginX' in shape.cells:  # connectors are not members
+            if "BeginX" in shape.cells:  # connectors are not members
                 continue
             if bottom <= shape.y <= top:
                 result.append(shape)
@@ -148,31 +150,31 @@ class Container:
         """
         lanes = self.lanes
         if not lanes:
-            raise ValueError('page has no Swimlane lanes; not a CFF diagram')
+            raise ValueError("page has no Swimlane lanes; not a CFF diagram")
         top_lane = lanes[0]
 
         new_xml = vsdx.ET.fromstring(vsdx.ET.tostring(top_lane.xml))
-        shapes_tag = self.page.xml.find(f'{vsdx.namespace}Shapes')
+        shapes_tag = self.page.xml.find(f"{vsdx.namespace}Shapes")
         if shapes_tag is None:
-            raise ValueError('page has no Shapes tag')
+            raise ValueError("page has no Shapes tag")
         self.page.set_max_ids()  # ensure max_id reflects existing shapes
         id_map = self.page.vis.increment_shape_ids(new_xml, self.page)
         self.page.vis.update_ids(new_xml, id_map)
         shapes_tag.append(new_xml)
         new_lane = Shape(xml=new_xml, parent=self.page, page=self.page)
 
-        new_lane.get_or_create_cell('PinY', v=str(top_lane.y + LANE_PITCH_INCHES))
+        new_lane.get_or_create_cell("PinY", v=str(top_lane.y + LANE_PITCH_INCHES))
 
         # grow the list and container so the new lane sits inside them
         pitch = LANE_PITCH_INCHES
         lane_list = self.swimlane_list
         if lane_list is not None:
-            lane_list.get_or_create_cell('PinY', v=str(lane_list.y + pitch / 2))
-            lane_list.get_or_create_cell('Height', v=str((lane_list.height or 0) + pitch))
+            lane_list.get_or_create_cell("PinY", v=str(lane_list.y + pitch / 2))
+            lane_list.get_or_create_cell("Height", v=str((lane_list.height or 0) + pitch))
         container = self.container_shape
         if container is not None:
-            container.get_or_create_cell('PinY', v=str(container.y + pitch / 2))
-            container.get_or_create_cell('Height', v=str((container.height or 0) + pitch))
+            container.get_or_create_cell("PinY", v=str(container.y + pitch / 2))
+            container.get_or_create_cell("Height", v=str((container.height or 0) + pitch))
 
         if label:
             self.set_lane_label(new_lane, label)
@@ -189,7 +191,7 @@ class Container:
             lane.text = label
 
     @staticmethod
-    def lane_heading(lane: Shape) -> Optional[Shape]:
+    def lane_heading(lane: Shape) -> Shape | None:
         """The lane's heading sub-shape (child carrying MasterShape)."""
         for child in lane.child_shapes:
             if child.master_shape_ID is not None:
@@ -203,4 +205,4 @@ class Container:
         """
         if self.lane_of(shape) is lane:
             return
-        shape.get_or_create_cell('PinY', v=str(lane.y))
+        shape.get_or_create_cell("PinY", v=str(lane.y))
