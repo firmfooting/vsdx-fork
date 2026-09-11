@@ -107,38 +107,32 @@ result and shows the membership. **Met** (harness lanes report).
 - [ ] every WI above adds pytest cases using the com_reference fixtures
 - [ ] Visio open-check harness (`tools/visio_check.ps1`) for local ground-truth validation
 
-### WI-7 — connector re-anchor (P1, next)
+### WI-7 — connector re-anchor (P1) ✅ done (commit ad14dc0)
 
-Close the last WI-1 item: retarget an existing connector's from/to.
+- [x] `Connect.retarget(page, connector_shape, from_shape, to_shape, route,
+  from_cp, to_cp)`: unresolved endpoints are kept (resolved from existing
+  records); re-runs `_apply_glue`; old records removed via the page's shared
+  `remove_connect_records` path (delete cascade now uses it too — DRY)
+- [x] `Page.reanchor_connector(...)` thin facade
+- [x] tests: 3 tests — both ends moved, one end kept, unresolvable raises
 
-- [ ] `Connect.retarget(page, connector_shape, from_shape, to_shape, route,
-  from_cp, to_cp)`: re-run `_apply_glue` for the new endpoints, swap the
-  page's Connect records for the connector, refresh start/finish geometry
-- [ ] `Page.reanchor_connector(...)` thin facade
-- [ ] tests: triggers + records point at the new shapes; old records gone
+### WI-8 — `create_shape` public API (P1) ✅ done (commit ad14dc0)
 
-### WI-8 — `create_shape` public API (P1)
+- [x] extended palette shipped as `vsdx/media/palette_extended.vsdx`
+  (covered by the existing package_data glob); `Media.palette` lazy accessor
+  + `Media.close()`
+- [x] `VisioFile.create_shape(page, palette_name, x, y, w, h, text)` —
+  reuses `copy_shape` and existing setters; sentinel cleared when text None
+- [x] DRY: no new copy/id-rewrite/fixture code
+- [x] tests: 4 tests incl. sentinel clearing, unknown-name error, zip validity
 
-Second half of WI-3. Palette shapes are plain (masterless) by design — they
-copy across documents without master-import, so headless creation needs no
-COM and no masters.
+### Phase C — integration and fork release ✅ done
 
-- [ ] ship the extended palette as a second media template
-  (`vsdx/media/palette_extended.vsdx`); `Media.palette` lazy accessor
-- [ ] `VisioFile.create_shape(page, palette_name, x, y, w=None, h=None,
-  text=None)`: find sentinel shape in palette, `copy_shape` into page,
-  position/size, set text (clear sentinel when text is None)
-- [ ] DRY: no new copy or id-rewrite code — reuse `copy_shape` and the
-  existing x/y/height/width setters; no second fixture copy helper
-- [ ] tests: create process/decision/database shapes, round-trip validity
-
-### Phase C — integration and fork release (P0, after WI-7/WI-8)
-
-- [ ] merge feat/swimlanes (contains the full chain) into master
-- [ ] final composite ground-truth check: palette shapes + connectors +
-  swimlane operations in ONE file, opened by real Visio
-- [ ] full suite on master; tag fork release `v0.6.2`; push master + tag
-- [ ] plan doc final status; leave upstream PRs #95/#96 pending maintainer
+- [x] merged full chain into master (merge commit e624ea8); suite 365 passed
+- [x] composite ground truth: palette shapes + straight/curved connectors +
+  retarget + new lane in ONE file — **PASS in real Visio**, 5 lanes reported
+- [x] tagged fork release `v0.6.2`, pushed master + tag
+- [x] upstream PRs #95/#96 remain open awaiting maintainer
 
 
 
