@@ -6,7 +6,7 @@ import io
 import xml.etree.ElementTree as ET
 
 
-def file_to_xml(filename: str, zip_file_contents: dict[str, io.BytesIO]) -> "ET.ElementTree[ET.Element] | None":
+def file_to_xml(filename: str, zip_file_contents: dict[str, io.BytesIO]) -> ET.ElementTree[ET.Element] | None:
     """Import a file as an ElementTree."""
     if filename in zip_file_contents:
         content: io.BytesIO = zip_file_contents[filename]

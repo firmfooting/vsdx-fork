@@ -11,7 +11,7 @@ from .shapes import Shape
 class Connect:
     """Connect class to represent a connection between two `Shape` objects"""
 
-    def __init__(self, xml: Element | None = None, page: "vsdx.Page | None" = None):
+    def __init__(self, xml: Element | None = None, page: vsdx.Page | None = None):
         if page is None:
             return
         if type(xml) is Element:  # create from xml
@@ -24,7 +24,7 @@ class Connect:
 
     @staticmethod
     def create(
-        page: "vsdx.Page | None" = None,
+        page: vsdx.Page | None = None,
         from_shape: Shape | None = None,
         to_shape: Shape | None = None,
         route: str = "dynamic",
