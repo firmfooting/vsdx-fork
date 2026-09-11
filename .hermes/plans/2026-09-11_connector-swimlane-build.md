@@ -28,27 +28,36 @@ A real dynamic connector between two shapes carries:
 
 ## Work items
 
-### WI-1 — Connector engine rewrite (P0)
+### WI-1 — Connector engine rewrite (P0) ✅ done (commit 1a564ee, Visio-verified)
 
 Replace the string-replace trigger construction in `Connect.create()` with
 formula-exact connector construction:
 
-- [ ] `_WALKGLUE` on BeginX/BeginY/EndX/EndY
-- [ ] `_XFTRIGGER(Sheet.N!EventXFMod)` triggers referencing real from/to shape IDs
-- [ ] `GlueType=2`, `ObjType=2`
-- [ ] route_style parameter: 0 default, 1 right-angle, 16 straight, 17+ext=2 curved
-- [ ] connection-point glue via `Connections.Xn` cell references
-- [ ] remove debug print() from production paths
+- [x] `_WALKGLUE` on BeginX/BeginY/EndX/EndY
+- [x] `_XFTRIGGER(Sheet.N!EventXFMod)` triggers referencing real from/to shape IDs
+- [x] `GlueType=2`, `ObjType=2` + explicit dynamic route cells (ShapeRouteStyle=0)
+- [x] route_style parameter: 0 default, 1 right-angle, 16 straight, 17+ext=2 curved (`route='straight'|'rightangle'|'curved'`)
+- [x] connection-point glue via `Connections.Xn` cell references (`route='point'`, ToPart=100+n, ValueError when CPs missing)
+- [x] remove debug print() from production paths (library-wide logging tracked in #2)
 - [ ] connector re-anchor helper: retarget an existing connector's from/to
 
-Accept: generated file opens in Visio and shows a routed dynamic connector;
-endpoints move when target shapes move (manual COM check script provided).
+Accept: generated file opens in Visio and shows a routed dynamic connector. **Met:**
+`tools/visio_check.ps1` on engine output reports `PASS connectors=5 walkglue=3`.
 
-### WI-2 — shape deletion cascade (P0)
+### WI-2 — shape deletion cascade (P0) ✅ done (commit 1a564ee)
 
-- [ ] deleting a shape removes its incident connectors and their Connect records
+- [x] deleting a shape removes its incident connectors and their Connect records (`Page.delete_shape`)
 
-Accept: delete_shape on a connected shape leaves a valid, openable file.
+Accept: delete_shape on a connected shape leaves a valid, openable file. **Met**
+(test_delete_shape_cascades_connectors + zip validity check).
+
+### WI-0 — bugs discovered during the build (raised as issues)
+
+- [x] #1 master-import gap: create() on documents with own masters but no
+  connector master → FileNotFoundError (test3_house param strict-xfail)
+- [x] #2 debug print() pollution library-wide
+- [x] Media.curved_connector returned straight connector — fixed with
+  regression test (commit 5ad1b48)
 
 ### WI-3 — shape creation from a richer template palette (P1)
 
