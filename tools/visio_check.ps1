@@ -33,9 +33,9 @@ try {
             foreach ($page in $doc.Pages) {
                 $oneD = @()
                 foreach ($shape in $page.Shapes) {
-                    $isConnector = $false
-                    try { $isConnector = ($shape.OneD -eq $true) } catch { $isConnector = $false }
-                    if ($isConnector) {
+                    $hasBeginX = $false
+                    try { $null = $shape.Cells('BeginX'); $hasBeginX = $true } catch { $hasBeginX = $false }
+                    if ($hasBeginX) {
                         $oneD += $shape.NameID
                         $totalConnectors++
                         try {
