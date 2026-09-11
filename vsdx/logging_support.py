@@ -14,9 +14,10 @@ Usage in a vsdx module:
     from .logging_support import get_logger
     logger = get_logger(__name__)
 """
+
 import logging
 
-_PACKAGE_ROOT = 'vsdx'
+_PACKAGE_ROOT = "vsdx"
 
 _root = logging.getLogger(_PACKAGE_ROOT)
 if not _root.handlers:
@@ -35,11 +36,11 @@ def attach_debug_stream_handler() -> None:
     logging machinery. Idempotent; applications wanting different behaviour
     should configure the ``vsdx`` logger themselves and leave ``debug=False``.
     """
-    if any(getattr(h, '_vsdx_debug_handler', False) for h in _root.handlers):
+    if any(getattr(h, "_vsdx_debug_handler", False) for h in _root.handlers):
         return
     handler = logging.StreamHandler()
     handler.setLevel(logging.DEBUG)
-    handler.setFormatter(logging.Formatter('%(name)s: %(message)s'))
+    handler.setFormatter(logging.Formatter("%(name)s: %(message)s"))
     handler._vsdx_debug_handler = True  # type: ignore[attr-defined]
     _root.addHandler(handler)
     if _root.level == logging.NOTSET or _root.level > logging.DEBUG:

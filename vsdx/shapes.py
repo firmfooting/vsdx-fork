@@ -1,15 +1,12 @@
 from __future__ import annotations
 
+import html
+import re
 import xml.etree.ElementTree as ET
 from xml.etree.ElementTree import Element
-import re
-import html
-
-from typing import Dict
-from typing import List
-from typing import Optional
 
 import deprecation
+
 import vsdx
 from vsdx import namespace
 
@@ -19,8 +16,9 @@ logger = get_logger(__name__)
 
 shape_type_names = {  # a map from English language shape to a list of know names for that Shape type
     # note that Shape names may be appended with a number e.g. 'Dynamischer Verbinder.2'
-    'Dynamic Connector': ['dynamic connector', 'dynamischer verbinder']
+    "Dynamic Connector": ["dynamic connector", "dynamischer verbinder"]
 }
+
 
 def to_float(val: str):
     """Convert a value to float or 0.0"""
@@ -31,42 +29,45 @@ def to_float(val: str):
     except ValueError:
         return 0.0
 
+
 master_re = re.compile(
     r"^(?P<prefix>(?:<ns0:[cp].+?\/>)*)"
     r"(?P<content>.*?)"
     r"(?P<suffix>(?:<ns0:[cp].+?\/>)*\n*)$",
-    re.DOTALL
+    re.DOTALL,
 )
+
 
 class Cell:
     """Represents a Cell element in a vsdx xml file"""
+
     def __init__(self, xml: Element, shape: Shape):
         self.xml = xml
         self.shape = shape
 
     @property
     def value(self):
-        return self.xml.attrib.get('V')
+        return self.xml.attrib.get("V")
 
     @value.setter
     def value(self, value: str):
-        self.xml.attrib['V'] = str(value)
+        self.xml.attrib["V"] = str(value)
 
     @property
     def formula(self):
-        return self.xml.attrib.get('F')
+        return self.xml.attrib.get("F")
 
     @formula.setter
     def formula(self, value: str):
-        self.xml.attrib['F'] = str(value)
+        self.xml.attrib["F"] = str(value)
 
     @property
     def name(self):
-        return self.xml.attrib.get('N')
+        return self.xml.attrib.get("N")
 
     @property
     def func(self):  # assume F stands for function, i.e. F="Width*0.5"
-        return self.xml.attrib.get('F')
+        return self.xml.attrib.get("F")
 
     def __repr__(self):
         return f"Cell: name={self.name} val={self.value} func={self.func}"
@@ -74,9 +75,10 @@ class Cell:
 
 class DataProperty:
     """Represents a single Data Property item associated with a Shape object"""
+
     def __init__(self, *, xml: Element, shape: Shape):
         """init a DataProperty from a property xml element in a Shape object"""
-        name = xml.attrib.get('N')
+        name = xml.attrib.get("N")
         # get Cell element for each property of DataProperty
         label_cell = xml.find(f'{namespace}Cell[@N="Label"]')
 
@@ -98,14 +100,13 @@ class DataProperty:
             sort_key_cell = xml.find(f'{namespace}Cell[@N="SortKey"]')
 
             # get values from each Cell Element
-            self.value_type = value_type_cell.attrib.get('V') if isinstance(value_type_cell, Element) else None
-            self.label = label_cell.attrib.get('V') if isinstance(label_cell, Element) else None
-            self.prompt = prompt_cell.attrib.get('V') if isinstance(prompt_cell, Element) else None
-            self.sort_key = sort_key_cell.attrib.get('V') if isinstance(sort_key_cell, Element) else None
+            self.value_type = value_type_cell.attrib.get("V") if isinstance(value_type_cell, Element) else None
+            self.label = label_cell.attrib.get("V") if isinstance(label_cell, Element) else None
+            self.prompt = prompt_cell.attrib.get("V") if isinstance(prompt_cell, Element) else None
+            self.sort_key = sort_key_cell.attrib.get("V") if isinstance(sort_key_cell, Element) else None
         else:
             # over-ridden master shape properties have no label - only a name and value
-            master_props = [p for p in shape.master_shape.data_properties.values()
-                           if p.name == name]
+            master_props = [p for p in shape.master_shape.data_properties.values() if p.name == name]
             if master_props:
                 # get first match 0 - there should always be one item
                 master_prop = master_props[0]  # type: DataProperty
@@ -120,11 +121,11 @@ class DataProperty:
         value_cell = self.xml.find(f'{namespace}Cell[@N="Value"]')
         value = None
         if isinstance(value_cell, Element):
-            if value_cell.attrib.get('V') is not None:
-                value = value_cell.attrib.get('V')  # populate value from V attribute
-                if self.get_attribute('Value', 'F') == 'No Formula':
-                    self.remove_attribute('Value', 'F')  # clean up 'No Formula' attribute if present
-                    self.set_attribute('Value', 'U', 'STR')  # set type to string
+            if value_cell.attrib.get("V") is not None:
+                value = value_cell.attrib.get("V")  # populate value from V attribute
+                if self.get_attribute("Value", "F") == "No Formula":
+                    self.remove_attribute("Value", "F")  # clean up 'No Formula' attribute if present
+                    self.set_attribute("Value", "U", "STR")  # set type to string
             elif value_cell.text:
                 value = value_cell.text  # populate value from element inner text
         return value
@@ -134,17 +135,17 @@ class DataProperty:
         """Set the value of the data property"""
         value_cell = self.xml.find(f'{namespace}Cell[@N="Value"]')
         if isinstance(value_cell, Element):
-            if value_cell.attrib.get('V') is not None:
-                value_cell.attrib['V'] = value  # populate value in V attribute
+            if value_cell.attrib.get("V") is not None:
+                value_cell.attrib["V"] = value  # populate value in V attribute
             elif value_cell.text:
                 value_cell.text = value  # populate value in element inner text
 
-    def get_attribute(self, name: str, attrib: str) -> Optional[str]:
+    def get_attribute(self, name: str, attrib: str) -> str | None:
         """Get the attribute value of the cell element"""
         element = self._get_element(name)
         if isinstance(element, Element):
             return element.attrib.get(attrib)
-        
+
     def set_attribute(self, name: str, attrib: str, value: str) -> bool:
         """Set the attribute value of the cell element"""
         element = self._get_element(name)
@@ -152,7 +153,7 @@ class DataProperty:
             element.attrib[attrib] = value
             return True
         return False
-        
+
     def remove_attribute(self, name: str, attrib: str) -> bool:
         """Remove the attribute from the cell element"""
         element = self._get_element(name)
@@ -162,26 +163,26 @@ class DataProperty:
                 return True
         return False
 
-    def _get_element(self, name: str) -> Optional[Element]:
+    def _get_element(self, name: str) -> Element | None:
         """Get the value of the data property as an xml element"""
         element = self.xml.find(f'{namespace}Cell[@N="{name}"]')
         return element
 
 
 class Shape:
-    """Represents a single shape, or a group shape containing other shapes
-    """
-    def __init__(self, xml: Element, parent: vsdx.Page or Shape, page: vsdx.Page):
+    """Represents a single shape, or a group shape containing other shapes"""
+
+    def __init__(self, xml: Element, parent: vsdx.Page | Shape, page: vsdx.Page):
         self.xml = xml
         self.parent = parent
         self.tag = xml.tag
-        self.ID = xml.attrib.get('ID', None)
-        self.master_shape_ID = xml.attrib.get('MasterShape', None)
-        self.master_page_ID = xml.attrib.get('Master', None)  # i.e. '2', note: the master_page.name not list index
+        self.ID = xml.attrib.get("ID", None)
+        self.master_shape_ID = xml.attrib.get("MasterShape", None)
+        self.master_page_ID = xml.attrib.get("Master", None)  # i.e. '2', note: the master_page.name not list index
         if self.master_page_ID is None and isinstance(parent, Shape):  # in case of a sub_shape
             self.master_page_ID = parent.master_page_ID
-        self.shape_type = xml.attrib.get('Type', None)
-        self.shape_name = xml.attrib.get('NameU') or xml.get('Name')
+        self.shape_type = xml.attrib.get("Type", None)
+        self.shape_name = xml.attrib.get("NameU") or xml.get("Name")
         self.page = page
 
         # get Cells in Shape
@@ -195,7 +196,7 @@ class Shape:
             # print(f"geometry({type(geometry)}):{geometry}")
             self.geometry = vsdx.Geometry(xml=geometry, shape=self)
             for r in geometry.findall(f"{namespace}Row"):
-                row_type = r.attrib['T']
+                row_type = r.attrib["T"]
                 if row_type:
                     for e in r.findall(f"{namespace}Cell"):
                         cell = vsdx.Cell(xml=e, shape=self)
@@ -205,7 +206,7 @@ class Shape:
         control = self.xml.find(f'{namespace}Section[@N="Control"]')
         if type(control) is Element:
             for r in control.findall(f"{namespace}Row"):
-                row_type = r.attrib['N']
+                row_type = r.attrib["N"]
                 if row_type:
                     for e in r.findall(f"{namespace}Cell"):
                         cell = vsdx.Cell(xml=e, shape=self)
@@ -233,16 +234,16 @@ class Shape:
 
     @property
     def universal_name(self):
-        name_univ = self.xml.attrib.get('NameU')  # default to shapes own unicode name
+        name_univ = self.xml.attrib.get("NameU")  # default to shapes own unicode name
         if self.master_shape:
             page_sheet = self.master_shape.page._pagesheet_xml
             layer = page_sheet.find(f'{namespace}Section[@N="Layer"]')
             name_univ_cell = layer.find(f'{namespace}Cell[@N="NameUniv"]') if layer is not None else None
             if name_univ_cell is not None:
-                name_univ = name_univ_cell.attrib.get('V') or name_univ
+                name_univ = name_univ_cell.attrib.get("V") or name_univ
         return name_univ
 
-    def copy(self, page: Optional[vsdx.Page] = None) -> Shape:
+    def copy(self, page: vsdx.Page | None = None) -> Shape:
         """Copy this Shape to the specified destination Page, and return the copy.
 
         If the destination page is not specified, the Shape is copied to its containing Page.
@@ -275,7 +276,7 @@ class Shape:
         """
         master_page = self.page.vis.get_master_page_by_id(self.master_page_ID)
         if not master_page:
-            return   # None if no master page set for this Shape
+            return  # None if no master page set for this Shape
         master_shape = master_page.child_shapes[0]  # there's always a single master shape in a master page
 
         if self.master_shape_ID is not None:
@@ -294,7 +295,7 @@ class Shape:
         return self.page.vis.get_master_page_by_id(self.master_page_ID)
 
     @property
-    def data_properties(self) -> Dict[str, DataProperty]:
+    def data_properties(self) -> dict[str, DataProperty]:
         """
         Get data properties of the shape - which labels, names, and values
         returns a dictionary of DataProperty objects indexed by property label
@@ -310,7 +311,7 @@ class Shape:
             properties = self.master_shape.data_properties
         properties_xml = self.xml.find(f'{namespace}Section[@N="Property"]')
         if type(properties_xml) is Element:
-            property_rows = properties_xml.findall(f'{namespace}Row')
+            property_rows = properties_xml.findall(f"{namespace}Row")
             for prop in property_rows:
                 data_prop = DataProperty(xml=prop, shape=self)
                 # add properties to dict to allow fast lookup by property.label
@@ -354,9 +355,9 @@ class Shape:
         # create new Cell from xml
         self.cells[name] = Cell(xml=cell_xml, shape=self)
         self.cells[name].value = value
-        cells = self.xml.findall(f'{namespace}Cell')
+        cells = self.xml.findall(f"{namespace}Cell")
         if len(cells):
-            self.xml.insert(list(self.xml).index(cells[-1])+1, cell_xml)  # insert after last Cell
+            self.xml.insert(list(self.xml).index(cells[-1]) + 1, cell_xml)  # insert after last Cell
         else:
             self.xml.insert(0, cell_xml)
 
@@ -377,7 +378,7 @@ class Shape:
         # create new Cell from xml
         self.cells[name] = Cell(xml=cell_xml, shape=self)
         self.cells[name].formula = value
-        cells = self.xml.findall(f'{namespace}Cell')
+        cells = self.xml.findall(f"{namespace}Cell")
         if len(cells):
             self.xml.insert(list(self.xml).index(cells[-1]) + 1, cell_xml)  # insert after last Cell
         else:
@@ -385,52 +386,52 @@ class Shape:
 
     @property
     def line_style_id(self):
-        return self.xml.attrib.get('LineStyle')
+        return self.xml.attrib.get("LineStyle")
 
     @line_style_id.setter
     def line_style_id(self, value):
-        self.xml.attrib['LineStyle'] = str(value)
+        self.xml.attrib["LineStyle"] = str(value)
 
     @property
     def fill_style_id(self):
-        return self.xml.attrib.get('FillStyle')
+        return self.xml.attrib.get("FillStyle")
 
     @fill_style_id.setter
     def fill_style_id(self, value):
-        self.xml.attrib['FillStyle'] = str(value)
+        self.xml.attrib["FillStyle"] = str(value)
 
     @property
     def text_style_id(self):
-        return self.xml.attrib.get('TextStyle')
+        return self.xml.attrib.get("TextStyle")
 
     @text_style_id.setter
     def text_style_id(self, value):
-        self.xml.attrib['TextStyle'] = str(value)
+        self.xml.attrib["TextStyle"] = str(value)
 
     @property
     def line_weight(self) -> float:
-        val = self.cell_value('LineWeight')
+        val = self.cell_value("LineWeight")
         return to_float(val)
 
     @line_weight.setter
-    def line_weight(self, value: float or str):
-        self.set_cell_value('LineWeight', str(value))
+    def line_weight(self, value: float | str):
+        self.set_cell_value("LineWeight", str(value))
 
     @property
     def line_color(self) -> str:
-        return self.cell_value('LineColor')
+        return self.cell_value("LineColor")
 
     @line_color.setter
     def line_color(self, value: str):
-        self.set_cell_value('LineColor', str(value))
+        self.set_cell_value("LineColor", str(value))
 
     @property
     def fill_color(self) -> str:
-        return self.cell_value('FillForegnd')
+        return self.cell_value("FillForegnd")
 
     @fill_color.setter
     def fill_color(self, value: str):
-        self.set_cell_value('FillForegnd', str(value))
+        self.set_cell_value("FillForegnd", str(value))
 
     @property
     def text_color(self):
@@ -438,7 +439,7 @@ class Shape:
         char_section = self.xml.find(f'{namespace}Section[@N="Character"]')
         color_cells = char_section.findall(f'{namespace}Row/{namespace}Cell[@N="Color"]') if char_section is not None else None
         if color_cells:
-            return color_cells[0].attrib.get('V')
+            return color_cells[0].attrib.get("V")
 
     @text_color.setter
     def text_color(self, value):
@@ -446,11 +447,11 @@ class Shape:
         char_section = self.xml.find(f'{namespace}Section[@N="Character"]')
         color_cells = char_section.findall(f'{namespace}Row/{namespace}Cell[@N="Color"]') if char_section is not None else None
         if color_cells:
-            color_cells[0].attrib['V'] = value
+            color_cells[0].attrib["V"] = value
 
     @property
     def end_arrow(self):
-        return self.cell_value('EndArrow')
+        return self.cell_value("EndArrow")
 
     @end_arrow.setter
     def end_arrow(self, value):
@@ -458,95 +459,95 @@ class Shape:
             value = 13  # 13 is standard arrow
         if value is False:
             value = 0  # no arrow
-        self.set_cell_value('EndArrow', str(value))
+        self.set_cell_value("EndArrow", str(value))
 
     @property
     def x(self):
-        return to_float(self.cell_value('PinX'))
+        return to_float(self.cell_value("PinX"))
 
     @x.setter
-    def x(self, value: float or str):
-        self.set_cell_value('PinX', str(value))
+    def x(self, value: float | str):
+        self.set_cell_value("PinX", str(value))
 
     @property
     def y(self):
-        return to_float(self.cell_value('PinY'))
+        return to_float(self.cell_value("PinY"))
 
     @y.setter
-    def y(self, value: float or str):
-        self.set_cell_value('PinY', str(value))
+    def y(self, value: float | str):
+        self.set_cell_value("PinY", str(value))
 
     @property
     def loc_x(self):
-        return to_float(self.cell_value('LocPinX'))
+        return to_float(self.cell_value("LocPinX"))
 
     @loc_x.setter
-    def loc_x(self, value: float or str):
-        self.set_cell_value('LocPinX', str(value))
+    def loc_x(self, value: float | str):
+        self.set_cell_value("LocPinX", str(value))
 
     @property
     def loc_x_f(self):
-        return self.cell_formula('LocPinX')
+        return self.cell_formula("LocPinX")
 
     @property
     def loc_y(self):
-        return to_float(self.cell_value('LocPinY'))
+        return to_float(self.cell_value("LocPinY"))
 
     @loc_y.setter
-    def loc_y(self, value: float or str):
-        self.set_cell_value('LocPinY', str(value))
+    def loc_y(self, value: float | str):
+        self.set_cell_value("LocPinY", str(value))
 
     @property
     def loc_y_f(self):
-        return self.cell_formula('LocPinY')
+        return self.cell_formula("LocPinY")
 
     @property
     def line_to_x(self):
-        return to_float(self.cell_value('Geometry/LineTo/X'))
+        return to_float(self.cell_value("Geometry/LineTo/X"))
 
     @line_to_x.setter
     def line_to_x(self, value):
-        self.set_cell_value('Geometry/LineTo/X', str(value))
+        self.set_cell_value("Geometry/LineTo/X", str(value))
 
     @property
     def line_to_y(self):
-        return to_float(self.cell_value('Geometry/LineTo/Y'))
+        return to_float(self.cell_value("Geometry/LineTo/Y"))
 
     @line_to_y.setter
     def line_to_y(self, value):
-        self.set_cell_value('Geometry/LineTo/Y', str(value))
+        self.set_cell_value("Geometry/LineTo/Y", str(value))
 
     @property
     def begin_x(self):
-        return to_float(self.cell_value('BeginX'))
+        return to_float(self.cell_value("BeginX"))
 
     @begin_x.setter
-    def begin_x(self, value: float or str):
-        self.set_cell_value('BeginX', str(value))
+    def begin_x(self, value: float | str):
+        self.set_cell_value("BeginX", str(value))
 
     @property
     def begin_y(self):
-        return to_float(self.cell_value('BeginY'))
+        return to_float(self.cell_value("BeginY"))
 
     @begin_y.setter
-    def begin_y(self, value: float or str):
-        self.set_cell_value('BeginY', str(value))
+    def begin_y(self, value: float | str):
+        self.set_cell_value("BeginY", str(value))
 
     @property
     def end_x(self):
-        return to_float(self.cell_value('EndX'))
+        return to_float(self.cell_value("EndX"))
 
     @end_x.setter
-    def end_x(self, value: float or str):
-        self.set_cell_value('EndX', str(value))
+    def end_x(self, value: float | str):
+        self.set_cell_value("EndX", str(value))
 
     @property
     def end_y(self):
-        return to_float(self.cell_value('EndY'))
+        return to_float(self.cell_value("EndY"))
 
     @end_y.setter
-    def end_y(self, value: float or str):
-        self.set_cell_value('EndY', str(value))
+    def end_y(self, value: float | str):
+        self.set_cell_value("EndY", str(value))
 
     def move(self, x_delta: float, y_delta: float):
         if self.geometry:
@@ -558,7 +559,7 @@ class Shape:
             self.begin_y = self.begin_y + y_delta
         self.y = self.y + y_delta
 
-    def get_or_create_cell(self, name: str, v: str = None, f: str = None) -> 'vsdx.Cell':
+    def get_or_create_cell(self, name: str, v: str = None, f: str = None) -> vsdx.Cell:
         """Set or create a named cell on this shape.
 
         Existing cells have their V/F attributes updated in place. New cells
@@ -585,7 +586,7 @@ class Shape:
         cell_el = ET.fromstring(f'<Cell xmlns="{vsdx.namespace[1:-1]}" {attribs}/>')
         insert_at = 0
         for i, child in enumerate(list(self.xml)):
-            if child.tag == f'{vsdx.namespace}Cell':
+            if child.tag == f"{vsdx.namespace}Cell":
                 insert_at = i + 1
         self.xml.insert(insert_at, cell_el)
         cell = vsdx.Cell(xml=cell_el, shape=self)
@@ -594,27 +595,27 @@ class Shape:
 
     @property
     def height(self):
-        return to_float(self.cell_value('Height'))
+        return to_float(self.cell_value("Height"))
 
     @height.setter
-    def height(self, value: float or str):
-        self.set_cell_value('Height', str(value))
+    def height(self, value: float | str):
+        self.set_cell_value("Height", str(value))
 
     @property
     def width(self):
-        return to_float(self.cell_value('Width'))
+        return to_float(self.cell_value("Width"))
 
     @width.setter
-    def width(self, value: float or str):
-        self.set_cell_value('Width', str(value))
+    def width(self, value: float | str):
+        self.set_cell_value("Width", str(value))
 
     @property
     def angle(self):
-        return to_float(self.cell_value('Angle'))
+        return to_float(self.cell_value("Angle"))
 
     @angle.setter
-    def angle(self, value: float or str):
-        self.set_cell_value('Angle', str(value))
+    def angle(self, value: float | str):
+        self.set_cell_value("Angle", str(value))
 
     @property
     def bounds(self) -> tuple:
@@ -633,7 +634,7 @@ class Shape:
     def relative_bounds(self):
         # get bounds of a shape relative to it's parent (if shape has a parent)
         bx, by, ex, ey = self.bounds
-        if self.parent and self.parent.shape_type == 'Group':
+        if self.parent and self.parent.shape_type == "Group":
             pbx, pby, pex, pey = self.parent.bounds
             bx += pbx
             by += pby
@@ -658,7 +659,7 @@ class Shape:
             self.x, self.y = start
             # lines/connectors are defined in different ways
             # Check whether shape is a connector based on name in known languages
-            is_connector = self.universal_name == 'Dynamic connector'
+            is_connector = self.universal_name == "Dynamic connector"
 
             self.begin_x, self.begin_y = start
             self.end_x, self.end_y = finish
@@ -670,17 +671,17 @@ class Shape:
             self.x, self.y = start
             self.geometry.set_move_to(0.0, 0.0)
             self.geometry.set_line_to(self.width, self.height)
-            txt_pin_x = self.cells.get('TxtPinX')
-            txt_pin_y = self.cells.get('TxtPinY')
+            txt_pin_x = self.cells.get("TxtPinX")
+            txt_pin_y = self.cells.get("TxtPinY")
             if txt_pin_x and txt_pin_y:
                 if is_connector:
                     txt_pin_x.value, txt_pin_y.value = self.width / 2, self.height / 2
                 else:
                     txt_pin_x.value, txt_pin_y.value = self.center_x_y
-                self.set_cell_value(name='Control/TextPosition/X', value=txt_pin_x.value)
-                self.set_cell_value(name='Control/TextPosition/Y', value=txt_pin_y.value)
-                self.set_cell_value(name='Control/TextPosition/XDyn', value=txt_pin_x.value)
-                self.set_cell_value(name='Control/TextPosition/YDyn', value=txt_pin_y.value)
+                self.set_cell_value(name="Control/TextPosition/X", value=txt_pin_x.value)
+                self.set_cell_value(name="Control/TextPosition/Y", value=txt_pin_y.value)
+                self.set_cell_value(name="Control/TextPosition/XDyn", value=txt_pin_x.value)
+                self.set_cell_value(name="Control/TextPosition/YDyn", value=txt_pin_y.value)
                 # print(cp1.cells.keys())
             cells = list(self.cells.values()) + self.geometry.cells
             for r in self.geometry.rows.values():
@@ -690,7 +691,7 @@ class Shape:
                 v = None
                 formula = c.formula
                 if formula:
-                    if formula == 'Inh' and self.master_shape:
+                    if formula == "Inh" and self.master_shape:
                         master_c = self.master_shape.cells.get(c.name)
                         formula = master_c.formula if master_c else formula
                     v = vsdx.calc_value(self, formula)
@@ -703,10 +704,7 @@ class Shape:
         text_element = self.xml.find(f"{namespace}Text")
 
         if isinstance(text_element, Element):
-            return (
-                (text_element.text or "") +
-                "".join(html.unescape(ET.tostring(e, encoding="unicode")) for e in text_element)
-            )
+            return (text_element.text or "") + "".join(html.unescape(ET.tostring(e, encoding="unicode")) for e in text_element)
         elif self.master_page_ID and self.master_shape and self.master_shape.text:
             return self.master_shape.text  # get text from master shape
         return ""
@@ -741,25 +739,29 @@ class Shape:
         for child in wrapper:
             text_element.append(child)
 
-    @deprecation.deprecated(deprecated_in="0.5.0", removed_in="1.0.0", current_version=vsdx.__version__,
-                            details="Use Shape.child_shapes property to access shapes within a shape")
-    def sub_shapes(self) -> List[Shape]:
+    @deprecation.deprecated(
+        deprecated_in="0.5.0",
+        removed_in="1.0.0",
+        current_version=vsdx.__version__,
+        details="Use Shape.child_shapes property to access shapes within a shape",
+    )
+    def sub_shapes(self) -> list[Shape]:
         return self.child_shapes
 
     @property
     def child_shapes(self):
         """Get child/sub shapes contained by a Shape
 
-                :returns: list of Shape objects
-                :rtype: List[Shape]
-                """
+        :returns: list of Shape objects
+        :rtype: List[Shape]
+        """
         shapes = list()
         # for each shapes tag, look for Shape objects
         # self can be either a Shapes or a Shape
         # a Shapes has a list of Shape
         # a Shape can have 0 or 1 Shapes (1 if type is Group)
 
-        if self.shape_type == 'Group':
+        if self.shape_type == "Group":
             parent_element = self.xml.find(f"{namespace}Shapes")
         else:  # a Shapes
             parent_element = self.xml
@@ -776,13 +778,13 @@ class Shape:
         # return all shapes within another shape, recursively
         return self._all_shapes()
 
-    def _all_shapes(self, shapes: List[Shape] = None) -> List[Shape]:
+    def _all_shapes(self, shapes: list[Shape] = None) -> list[Shape]:
         # recursively search for shapes and return all found
         if not shapes:
             shapes = list()
         for shape in self.child_shapes:  # type: Shape
             shapes.append(shape)
-            if shape.shape_type == 'Group':
+            if shape.shape_type == "Group":
                 found = shape.all_shapes
                 if found:
                     shapes.extend(found)
@@ -790,7 +792,7 @@ class Shape:
 
     def get_max_id(self):
         max_id = int(self.ID)
-        if self.shape_type == 'Group':
+        if self.shape_type == "Group":
             for shape in self.child_shapes:
                 new_max = shape.get_max_id()
                 if new_max > max_id:
@@ -806,12 +808,12 @@ class Shape:
         """
         # recursively search for shapes by text and return first match
         for shape in self.all_shapes:  # type: Shape
-            if shape.ID == shape_id:
+            if shape_id == shape.ID:
                 return shape
 
-    def find_shapes_by_id(self, shape_id: str) -> List[Shape]:
+    def find_shapes_by_id(self, shape_id: str) -> list[Shape]:
         # recursively search for shapes by ID and return all matches
-        return [s for s in self.all_shapes if s.ID == shape_id]
+        return [s for s in self.all_shapes if shape_id == s.ID]
 
     def find_shape_by_attr(self, attr: str, attr_value: str) -> Shape:  # returns Shape
         """
@@ -827,7 +829,7 @@ class Shape:
             if str(shape.xml.attrib.get(attr)) == attr_value:
                 return shape
 
-    def find_shapes_by_master(self, master_page_ID: str, master_shape_ID: str) -> List[Shape]:
+    def find_shapes_by_master(self, master_page_ID: str, master_shape_ID: str) -> list[Shape]:
         # recursively search for shapes by master ID and return all matches
         return [s for s in self.all_shapes if s.master_shape_ID == master_shape_ID and s.master_page_ID == master_page_ID]
 
@@ -837,11 +839,11 @@ class Shape:
             if text in shape.text:
                 return shape
 
-    def find_shapes_by_text(self, text: str) -> List[Shape]:
+    def find_shapes_by_text(self, text: str) -> list[Shape]:
         # recursively search for shapes by text and return all matches
         return [s for s in self.all_shapes if text in s.text]
 
-    def find_shapes_by_regex(self, regex: str) -> List[Shape]:
+    def find_shapes_by_regex(self, regex: str) -> list[Shape]:
         # recursively search for shapes by regex and return all matches
         return [shape for shape in self.all_shapes if re.search(regex, shape.text)]
 
@@ -851,26 +853,33 @@ class Shape:
             if property_label in shape.data_properties.keys():
                 return shape
 
-    def find_shapes_by_property_label(self, property_label: str, shapes: List[Shape] = None) -> List[Shape]:
+    def find_shapes_by_property_label(self, property_label: str, shapes: list[Shape] = None) -> list[Shape]:
         # recursively search for shapes by property label and return all matches
         return [s for s in self.all_shapes if property_label in s.data_properties.keys()]
 
     def find_shape_by_property_label_value(self, property_label: str, property_value: str) -> Shape:  # returns Shape
         # recursively search for shapes by property label and value, and return first match
         for shape in self.all_shapes:  # type: Shape
-            if property_label in shape.data_properties.keys() and \
-                    str(shape.data_properties[property_label].value) == property_value:
+            if (
+                property_label in shape.data_properties.keys()
+                and str(shape.data_properties[property_label].value) == property_value
+            ):
                 return shape
 
-    def find_shapes_by_property_label_value(self, property_label: str, property_value: str, shapes: List[Shape] = None) -> List[Shape]:
+    def find_shapes_by_property_label_value(
+        self, property_label: str, property_value: str, shapes: list[Shape] = None
+    ) -> list[Shape]:
         # recursively search for shapes by property label and return all matches
-        return [s for s in self.all_shapes if property_label in s.data_properties.keys() and \
-                    str(s.data_properties[property_label].value) == property_value]
+        return [
+            s
+            for s in self.all_shapes
+            if property_label in s.data_properties.keys() and str(s.data_properties[property_label].value) == property_value
+        ]
 
     def apply_text_filter(self, context: dict):
         # check text against all context keys
         text = self.text
-        for key in context.keys():
+        for key in context:
             r_key = "{{" + key + "}}"
             text = text.replace(r_key, str(context[key]))
         self.text = text

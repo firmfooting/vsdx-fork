@@ -1,7 +1,7 @@
 import difflib
-import zipfile
-import shutil
 import os
+import shutil
+import zipfile
 
 from .logging_support import get_logger
 
@@ -11,16 +11,17 @@ logger = get_logger(__name__)
 class VisioFileDiff:
     """Compares two vsdx files
 
-        :param filepath_a: file path of the first :class:`VisioFile` was created from
-        :type filepath_a: str
-        :param filepath_b: file path of the second :class:`VisioFile` was created from
-        :type filepath_b: str
-        """
+    :param filepath_a: file path of the first :class:`VisioFile` was created from
+    :type filepath_a: str
+    :param filepath_b: file path of the second :class:`VisioFile` was created from
+    :type filepath_b: str
+    """
+
     def __init__(self, filepath_a: str, filepath_b: str):
         if filepath_a == filepath_b:
-            raise ValueError('The two file paths should be different')
-        if not filepath_a.lower().endswith('.vsdx') or not filepath_b.lower().endswith('.vsdx'):
-            raise ValueError('Both files should be vsdx files')
+            raise ValueError("The two file paths should be different")
+        if not filepath_a.lower().endswith(".vsdx") or not filepath_b.lower().endswith(".vsdx"):
+            raise ValueError("Both files should be vsdx files")
 
         # load contents of each file
         self.filepath_a = filepath_a
@@ -41,7 +42,7 @@ class VisioFileDiff:
         for member_name in common_members:
             data_a = self.contents_a.get(member_name)
             data_a = VisioFileDiff.break_all_xml_into_lines(data_a)
-            #print(data_a)
+            # print(data_a)
             data_b = self.contents_b.get(member_name)
             data_b = VisioFileDiff.break_all_xml_into_lines(data_b)
             if data_a and data_b and data_a != data_b:  # only add diff if contents are not the same
@@ -60,8 +61,8 @@ class VisioFileDiff:
 
     @staticmethod
     def break_xml_into_lines(x: str) -> list:
-        x = x.replace('<', '\n<')  # add CR before each element start
-        return x.split('\n')
+        x = x.replace("<", "\n<")  # add CR before each element start
+        return x.split("\n")
 
     def common_members(self) -> list:
         # return a sorted list of members (file paths)
@@ -86,7 +87,7 @@ class VisioFileDiff:
         # list members in file b that are not in file a
         members_a = set(self.contents_a.keys())
         members_b = set(self.contents_b.keys())
-        return members_a-members_b
+        return members_a - members_b
 
     @staticmethod
     def extract_file_data(file_path: str) -> dict:
@@ -99,18 +100,18 @@ class VisioFileDiff:
         # process data in directory
         file_contents = {}
         for extracted_file_path in extracted_file_paths:
-            #print(f"Opening {os.path.join(directory, extracted_file_path)}")
+            # print(f"Opening {os.path.join(directory, extracted_file_path)}")
             full_path = os.path.join(directory, extracted_file_path)
             try:
                 if not os.path.isdir(full_path):
-                    with open(full_path, mode='r') as f:
+                    with open(full_path) as f:
                         file_data = f.readlines()
                     file_contents[extracted_file_path] = file_data
-                    #print(f"Opened and read contents of {extracted_file_path}")
-            except UnicodeDecodeError as e:
+                    # print(f"Opened and read contents of {extracted_file_path}")
+            except UnicodeDecodeError:
                 file_contents[extracted_file_path] = "Unable to decode file."
                 logger.warning("Failed to read file: %s", full_path)
-            except PermissionError as e:
+            except PermissionError:
                 file_contents[extracted_file_path] = "Unable to open file."
                 logger.warning("Failed to open file (PermissionError): %s", full_path)
         try:
