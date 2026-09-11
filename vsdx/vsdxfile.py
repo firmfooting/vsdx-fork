@@ -270,7 +270,6 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
             if m.page_id == id:
                 return m
 
-
     def remove_page_by_index(self, index: int):
         """Remove zero-based nth page from VisioFile object
 
@@ -769,7 +768,6 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
 
         for shape in shapes.findall(f"{namespace}Shape"):
             _replace_shape_text(shape, context)
-
 
     @staticmethod
     def get_shape_id(shape: ET) -> str:

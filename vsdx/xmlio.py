@@ -1,4 +1,5 @@
 """Zip-backed XML persistence helpers shared across modules."""
+
 from __future__ import annotations
 
 import io

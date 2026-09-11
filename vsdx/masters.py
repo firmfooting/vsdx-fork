@@ -4,6 +4,7 @@ Methods defined here are bound onto VisioFile at import time
 (see vsdxfile._bind_extracted_support) so the public API is unchanged
 while vsdxfile.py stays reviewable.
 """
+
 from __future__ import annotations
 
 import copy as copy_module

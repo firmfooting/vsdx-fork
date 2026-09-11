@@ -3,6 +3,7 @@
 Static methods defined here are bound onto VisioFile at import time so the
 public API (vis.jinja_render_vsdx(context)) is unchanged.
 """
+
 from __future__ import annotations
 
 import re
