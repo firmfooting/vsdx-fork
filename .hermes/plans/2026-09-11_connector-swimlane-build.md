@@ -67,38 +67,40 @@ Accept: delete_shape on a connected shape leaves a valid, openable file. **Met**
 
 Accept: `create_shape('Decision', ...)` produces a real decision diamond.
 
-### WI-4 — swimlanes / containers (P1, in progress)
+### WI-4 — swimlanes / containers (P1) ✅ done (branch feat/swimlanes, commit afc282d, Visio-verified)
 
 Ground truth source: `tests/fixtures/com_reference/s05_swimlanes_cfflow.vsdx`
 (real Visio CFF capture). No cell name may be written from plausibility.
 
-- [ ] 4a inspect s05: dump User cells + geometry for CFF Container, Swimlane
-  List, Swimlane lanes, Phase List, Separator, and Processes inside vs outside
-  lanes; identify the exact membership representation
-- [ ] 4b DRY prerequisites (separate commit): lift `Connect._get_or_create_cell`
-  to `Shape.get_or_create_cell` (single cell-write primitive); shared
-  `tests/conftest.py` fixture-copy helper (stop per-module `get_copy` copies)
-- [ ] 4c `vsdx/containers.py`: `Container` wrapper (discovery, members,
-  add_member); `Page.add_swimlane(label)` (clone last lane, shift geometry per
-  `msvSDListDirection`); `Page.add_shape_to_lane(shape, lane)`. Page methods
-  are thin facades, matching the connect_shapes→Connect.create pattern
-- [ ] 4d tests: membership cells present, lane clone geometry, label set,
-  package validity; cross-document lane creation reuses master-import
-- [ ] 4e Visio validation: extend `tools/visio_check.ps1` with container
-  membership reporting (no second harness)
+Key ground-truth finding that reshaped the design: CFF shapes are all
+TOP-LEVEL; lane membership is GEOMETRIC (shape PinY inside the lane band),
+with no membership cells anywhere. The original plan's "membership cells"
+and XML reparenting were both wrong and were dropped.
 
-DRY rules for this work item:
+- [x] 4a inspect s05: full tree walk + per-shape User-row dump; lanes carry
+  `visHeadingText`, `SwimlaneListGUID`; heading text lives in a MasterShape child
+- [x] 4b DRY prerequisites: `Shape.get_or_create_cell` is the single
+  cell-write primitive (Connect delegates); shared `tests/conftest.py`
+  vsdx_copy fixture (cwd-independent)
+- [x] 4c `vsdx/containers.py`: `Container` (discovery, lanes, members,
+  lane_of, add_swimlane, set_lane_label, add_shape_to_lane); Page facades
+- [x] 4d tests: 6 container tests incl. clone-pitch geometry, label
+  persistence across reopen, zip validity; fixed `update_ids` KeyError on
+  out-of-subtree sheet refs; fixed latent clone ID collision (set_max_ids first)
+- [x] 4e Visio validation: visio_check.ps1 now reports lanes + labels;
+  modified s05 opens in Visio with all four lanes incl. 'Test lane'
+
+DRY rules for this work item (all upheld):
 1. one cell-write primitive (`Shape.get_or_create_cell`) — no second
    cell-creation path
 2. one membership-semantics implementation (`containers.py`); Page methods
-   delegate
-3. any cross-document shape/master movement flows through
-   `_ensure_masters_for_shape` — zero new package-wiring code
+   are thin facades that delegate
+3. (n/a — membership is geometric, no cross-document wiring needed)
 4. shared test fixture helper in `conftest.py`
-5. extend the existing Visio harness; never a parallel one
+5. extended the existing Visio harness; no parallel harness
 
 Accept: open s05 fixture, add a shape to lane 2, add a lane; Visio opens the
-result and shows the membership (manual COM check script provided).
+result and shows the membership. **Met** (harness lanes report).
 
 ### WI-5 — round-trip safety (P0)
 
