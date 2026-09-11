@@ -1,0 +1,623 @@
+{
+    "generated":  "2026-09-11T15:18:57",
+    "visio_version":  "16.0",
+    "scenarios":  [
+                      {
+                          "scenario":  "s01_autoconnect_right",
+                          "file":  "s01_autoconnect_right.vsdx",
+                          "shapes":  [
+                                         {
+                                             "name":  "Sheet.1",
+                                             "id":  1,
+                                             "one_d":  0,
+                                             "master":  null,
+                                             "text":  "A",
+                                             "container":  null,
+                                             "cells":  {
+
+                                                       }
+                                         },
+                                         {
+                                             "name":  "Sheet.2",
+                                             "id":  2,
+                                             "one_d":  0,
+                                             "master":  null,
+                                             "text":  "B",
+                                             "container":  null,
+                                             "cells":  {
+
+                                                       }
+                                         },
+                                         {
+                                             "name":  "Dynamic connector",
+                                             "id":  3,
+                                             "one_d":  -1,
+                                             "master":  "Dynamic connector",
+                                             "cells":  {
+                                                           "BeginX":  "_WALKGLUE(BegTrigger,EndTrigger,WalkPreference)",
+                                                           "BeginY":  "_WALKGLUE(BegTrigger,EndTrigger,WalkPreference)",
+                                                           "EndX":  "_WALKGLUE(EndTrigger,BegTrigger,WalkPreference)",
+                                                           "EndY":  "_WALKGLUE(EndTrigger,BegTrigger,WalkPreference)",
+                                                           "BegTrigger":  "_XFTRIGGER(Sheet.1!EventXFMod)",
+                                                           "EndTrigger":  "_XFTRIGGER(Sheet.2!EventXFMod)",
+                                                           "EndXTrigger":  null,
+                                                           "GlueType":  "2",
+                                                           "ObjType":  "2",
+                                                           "ShapeRouteStyle":  "0",
+                                                           "ConLineRouteExt":  "0",
+                                                           "ConFixedCode":  "6",
+                                                           "BegPrompt":  null,
+                                                           "EndPrompt":  null,
+                                                           "DirX":  null,
+                                                           "DirY":  null,
+                                                           "Type":  null
+                                                       }
+                                         }
+                                     ],
+                          "notes":  "AutoConnect(right) created 1 shape(s); connector=Dynamic connector"
+                      },
+                      {
+                          "scenario":  "s02_glue_pin",
+                          "file":  "s02_glue_pin.vsdx",
+                          "shapes":  [
+                                         {
+                                             "name":  "Sheet.1",
+                                             "id":  1,
+                                             "one_d":  0,
+                                             "master":  null,
+                                             "text":  "A",
+                                             "container":  null,
+                                             "cells":  {
+
+                                                       }
+                                         },
+                                         {
+                                             "name":  "Sheet.2",
+                                             "id":  2,
+                                             "one_d":  0,
+                                             "master":  null,
+                                             "text":  "B",
+                                             "container":  null,
+                                             "cells":  {
+
+                                                       }
+                                         },
+                                         {
+                                             "name":  "Dynamic connector",
+                                             "id":  3,
+                                             "one_d":  -1,
+                                             "master":  "Dynamic connector",
+                                             "cells":  {
+                                                           "BeginX":  "_WALKGLUE(BegTrigger,EndTrigger,WalkPreference)",
+                                                           "BeginY":  "_WALKGLUE(BegTrigger,EndTrigger,WalkPreference)",
+                                                           "EndX":  "_WALKGLUE(EndTrigger,BegTrigger,WalkPreference)",
+                                                           "EndY":  "_WALKGLUE(EndTrigger,BegTrigger,WalkPreference)",
+                                                           "BegTrigger":  "_XFTRIGGER(Sheet.1!EventXFMod)",
+                                                           "EndTrigger":  "_XFTRIGGER(Sheet.2!EventXFMod)",
+                                                           "EndXTrigger":  null,
+                                                           "GlueType":  "2",
+                                                           "ObjType":  "2",
+                                                           "ShapeRouteStyle":  "0",
+                                                           "ConLineRouteExt":  "0",
+                                                           "ConFixedCode":  "6",
+                                                           "BegPrompt":  null,
+                                                           "EndPrompt":  null,
+                                                           "DirX":  null,
+                                                           "DirY":  null,
+                                                           "Type":  null
+                                                       }
+                                         }
+                                     ],
+                          "notes":  "GlueTo(PinX) on both ends succeeded"
+                      },
+                      {
+                          "scenario":  "s03_route_variants",
+                          "file":  "s03_route_variants.vsdx",
+                          "shapes":  [
+                                         {
+                                             "name":  "Sheet.1",
+                                             "id":  1,
+                                             "one_d":  0,
+                                             "master":  null,
+                                             "text":  "A",
+                                             "container":  null,
+                                             "cells":  {
+
+                                                       }
+                                         },
+                                         {
+                                             "name":  "Sheet.2",
+                                             "id":  2,
+                                             "one_d":  0,
+                                             "master":  null,
+                                             "text":  "B",
+                                             "container":  null,
+                                             "cells":  {
+
+                                                       }
+                                         },
+                                         {
+                                             "name":  "Dynamic connector",
+                                             "id":  3,
+                                             "one_d":  -1,
+                                             "master":  "Dynamic connector",
+                                             "cells":  {
+                                                           "BeginX":  "_WALKGLUE(BegTrigger,EndTrigger,WalkPreference)",
+                                                           "BeginY":  "_WALKGLUE(BegTrigger,EndTrigger,WalkPreference)",
+                                                           "EndX":  "_WALKGLUE(EndTrigger,BegTrigger,WalkPreference)",
+                                                           "EndY":  "_WALKGLUE(EndTrigger,BegTrigger,WalkPreference)",
+                                                           "BegTrigger":  "_XFTRIGGER(Sheet.1!EventXFMod)",
+                                                           "EndTrigger":  "_XFTRIGGER(Sheet.2!EventXFMod)",
+                                                           "EndXTrigger":  null,
+                                                           "GlueType":  "2",
+                                                           "ObjType":  "2",
+                                                           "ShapeRouteStyle":  "1",
+                                                           "ConLineRouteExt":  "0",
+                                                           "ConFixedCode":  "6",
+                                                           "BegPrompt":  null,
+                                                           "EndPrompt":  null,
+                                                           "DirX":  null,
+                                                           "DirY":  null,
+                                                           "Type":  null
+                                                       }
+                                         },
+                                         {
+                                             "name":  "Dynamic connector.4",
+                                             "id":  4,
+                                             "one_d":  -1,
+                                             "master":  "Dynamic connector",
+                                             "cells":  {
+                                                           "BeginX":  "_WALKGLUE(BegTrigger,EndTrigger,WalkPreference)",
+                                                           "BeginY":  "_WALKGLUE(BegTrigger,EndTrigger,WalkPreference)",
+                                                           "EndX":  "_WALKGLUE(EndTrigger,BegTrigger,WalkPreference)",
+                                                           "EndY":  "_WALKGLUE(EndTrigger,BegTrigger,WalkPreference)",
+                                                           "BegTrigger":  "_XFTRIGGER(Sheet.1!EventXFMod)",
+                                                           "EndTrigger":  "_XFTRIGGER(Sheet.2!EventXFMod)",
+                                                           "EndXTrigger":  null,
+                                                           "GlueType":  "2",
+                                                           "ObjType":  "2",
+                                                           "ShapeRouteStyle":  "16",
+                                                           "ConLineRouteExt":  "0",
+                                                           "ConFixedCode":  "6",
+                                                           "BegPrompt":  null,
+                                                           "EndPrompt":  null,
+                                                           "DirX":  null,
+                                                           "DirY":  null,
+                                                           "Type":  null
+                                                       }
+                                         },
+                                         {
+                                             "name":  "Dynamic connector.5",
+                                             "id":  5,
+                                             "one_d":  -1,
+                                             "master":  "Dynamic connector",
+                                             "cells":  {
+                                                           "BeginX":  "_WALKGLUE(BegTrigger,EndTrigger,WalkPreference)",
+                                                           "BeginY":  "_WALKGLUE(BegTrigger,EndTrigger,WalkPreference)",
+                                                           "EndX":  "_WALKGLUE(EndTrigger,BegTrigger,WalkPreference)",
+                                                           "EndY":  "_WALKGLUE(EndTrigger,BegTrigger,WalkPreference)",
+                                                           "BegTrigger":  "_XFTRIGGER(Sheet.1!EventXFMod)",
+                                                           "EndTrigger":  "_XFTRIGGER(Sheet.2!EventXFMod)",
+                                                           "EndXTrigger":  null,
+                                                           "GlueType":  "2",
+                                                           "ObjType":  "2",
+                                                           "ShapeRouteStyle":  "17",
+                                                           "ConLineRouteExt":  "2",
+                                                           "ConFixedCode":  "0",
+                                                           "BegPrompt":  null,
+                                                           "EndPrompt":  null,
+                                                           "DirX":  null,
+                                                           "DirY":  null,
+                                                           "Type":  null
+                                                       }
+                                         }
+                                     ],
+                          "notes":  "conn1(ShapeRouteStyle=1 right angle): 1; conn2(ShapeRouteStyle=16 straight): 16; conn3(ShapeRouteStyle=17 + ConLineRouteExt=2 curved): 17"
+                      },
+                      {
+                          "scenario":  "s04_point_glue",
+                          "file":  "s04_point_glue.vsdx",
+                          "shapes":  [
+                                         {
+                                             "name":  "Sheet.1",
+                                             "id":  1,
+                                             "one_d":  0,
+                                             "master":  null,
+                                             "text":  "A",
+                                             "container":  null,
+                                             "cells":  {
+
+                                                       }
+                                         },
+                                         {
+                                             "name":  "Sheet.2",
+                                             "id":  2,
+                                             "one_d":  0,
+                                             "master":  null,
+                                             "text":  "B",
+                                             "container":  null,
+                                             "cells":  {
+
+                                                       }
+                                         },
+                                         {
+                                             "name":  "Dynamic connector",
+                                             "id":  3,
+                                             "one_d":  -1,
+                                             "master":  "Dynamic connector",
+                                             "cells":  {
+                                                           "BeginX":  "86.6 mm",
+                                                           "BeginY":  "230.9 mm",
+                                                           "EndX":  "116.6 mm",
+                                                           "EndY":  "200.9 mm",
+                                                           "BegTrigger":  "_XFTRIGGER(Dynamic connector!EventXFMod)",
+                                                           "EndTrigger":  "_XFTRIGGER(Dynamic connector!EventXFMod)",
+                                                           "EndXTrigger":  null,
+                                                           "GlueType":  "2",
+                                                           "ObjType":  "2",
+                                                           "ShapeRouteStyle":  "0",
+                                                           "ConLineRouteExt":  "0",
+                                                           "ConFixedCode":  "0",
+                                                           "BegPrompt":  null,
+                                                           "EndPrompt":  null,
+                                                           "DirX":  null,
+                                                           "DirY":  null,
+                                                           "Type":  null
+                                                       }
+                                         }
+                                     ],
+                          "notes":  "begin cell name that worked: Connections.X1 on A; end cell name that worked: Connections.X1 on B; point glue failed: \n\nReferenced cell Sheet.1!Connections.X1 does not exist."
+                      },
+                      {
+                          "scenario":  "s05_swimlanes_cfflow",
+                          "file":  "s05_swimlanes_cfflow.vsdx",
+                          "shapes":  [
+                                         {
+                                             "name":  "CFF Container",
+                                             "id":  35,
+                                             "one_d":  0,
+                                             "master":  "CFF Container",
+                                             "text":  "Cross-Functional Flowchart",
+                                             "container":  {
+                                                               "style":  1,
+                                                               "lockMembership":  true
+                                                           },
+                                             "cells":  {
+
+                                                       }
+                                         },
+                                         {
+                                             "name":  "Swimlane List",
+                                             "id":  38,
+                                             "one_d":  0,
+                                             "master":  "Swimlane List",
+                                             "text":  "",
+                                             "container":  {
+                                                               "style":  1,
+                                                               "lockMembership":  false
+                                                           },
+                                             "cells":  {
+
+                                                       }
+                                         },
+                                         {
+                                             "name":  "Swimlane",
+                                             "id":  39,
+                                             "one_d":  0,
+                                             "master":  "Swimlane",
+                                             "text":  "Function 2",
+                                             "container":  {
+                                                               "style":  1,
+                                                               "lockMembership":  false
+                                                           },
+                                             "cells":  {
+
+                                                       }
+                                         },
+                                         {
+                                             "name":  "Swimlane.9",
+                                             "id":  42,
+                                             "one_d":  0,
+                                             "master":  "Swimlane",
+                                             "text":  "Function 1",
+                                             "container":  {
+                                                               "style":  1,
+                                                               "lockMembership":  false
+                                                           },
+                                             "cells":  {
+
+                                                       }
+                                         },
+                                         {
+                                             "name":  "Swimlane.15",
+                                             "id":  45,
+                                             "one_d":  0,
+                                             "master":  "Swimlane",
+                                             "text":  "Function 3",
+                                             "container":  {
+                                                               "style":  1,
+                                                               "lockMembership":  false
+                                                           },
+                                             "cells":  {
+
+                                                       }
+                                         },
+                                         {
+                                             "name":  "Phase List",
+                                             "id":  48,
+                                             "one_d":  0,
+                                             "master":  "Phase List",
+                                             "text":  "",
+                                             "container":  {
+                                                               "style":  1,
+                                                               "lockMembership":  true
+                                                           },
+                                             "cells":  {
+
+                                                       }
+                                         },
+                                         {
+                                             "name":  "Separator",
+                                             "id":  49,
+                                             "one_d":  0,
+                                             "master":  "Separator",
+                                             "text":  "",
+                                             "container":  {
+                                                               "style":  1,
+                                                               "lockMembership":  false
+                                                           },
+                                             "cells":  {
+
+                                                       }
+                                         },
+                                         {
+                                             "name":  "Start/End",
+                                             "id":  52,
+                                             "one_d":  0,
+                                             "master":  "Start/End",
+                                             "text":  "Start",
+                                             "container":  null,
+                                             "cells":  {
+
+                                                       }
+                                         },
+                                         {
+                                             "name":  "Decision",
+                                             "id":  53,
+                                             "one_d":  0,
+                                             "master":  "Decision",
+                                             "text":  "Decision",
+                                             "container":  null,
+                                             "cells":  {
+
+                                                       }
+                                         },
+                                         {
+                                             "name":  "Process",
+                                             "id":  54,
+                                             "one_d":  0,
+                                             "master":  "Process",
+                                             "text":  "Process",
+                                             "container":  null,
+                                             "cells":  {
+
+                                                       }
+                                         },
+                                         {
+                                             "name":  "Process.48",
+                                             "id":  55,
+                                             "one_d":  0,
+                                             "master":  "Process",
+                                             "text":  "Process",
+                                             "container":  null,
+                                             "cells":  {
+
+                                                       }
+                                         },
+                                         {
+                                             "name":  "Process.49",
+                                             "id":  56,
+                                             "one_d":  0,
+                                             "master":  "Process",
+                                             "text":  "Process",
+                                             "container":  null,
+                                             "cells":  {
+
+                                                       }
+                                         },
+                                         {
+                                             "name":  "Dynamic connector",
+                                             "id":  57,
+                                             "one_d":  -1,
+                                             "master":  "Dynamic connector",
+                                             "cells":  {
+                                                           "BeginX":  "_WALKGLUE(BegTrigger,EndTrigger,WalkPreference)",
+                                                           "BeginY":  "_WALKGLUE(BegTrigger,EndTrigger,WalkPreference)",
+                                                           "EndX":  "_WALKGLUE(EndTrigger,BegTrigger,WalkPreference)",
+                                                           "EndY":  "_WALKGLUE(EndTrigger,BegTrigger,WalkPreference)",
+                                                           "BegTrigger":  "_XFTRIGGER(\u0027Start/End\u0027!EventXFMod)",
+                                                           "EndTrigger":  "_XFTRIGGER(Process!EventXFMod)",
+                                                           "EndXTrigger":  null,
+                                                           "GlueType":  "2",
+                                                           "ObjType":  "2",
+                                                           "ShapeRouteStyle":  "0",
+                                                           "ConLineRouteExt":  "0",
+                                                           "ConFixedCode":  "0",
+                                                           "BegPrompt":  null,
+                                                           "EndPrompt":  null,
+                                                           "DirX":  null,
+                                                           "DirY":  null,
+                                                           "Type":  null
+                                                       }
+                                         },
+                                         {
+                                             "name":  "Dynamic connector.58",
+                                             "id":  58,
+                                             "one_d":  -1,
+                                             "master":  "Dynamic connector",
+                                             "cells":  {
+                                                           "BeginX":  "PAR(PNT(Decision!Connections.X2,Decision!Connections.Y2))",
+                                                           "BeginY":  "PAR(PNT(Decision!Connections.X2,Decision!Connections.Y2))",
+                                                           "EndX":  "_WALKGLUE(EndTrigger,BegTrigger,WalkPreference)",
+                                                           "EndY":  "_WALKGLUE(EndTrigger,BegTrigger,WalkPreference)",
+                                                           "BegTrigger":  "_XFTRIGGER(Decision!EventXFMod)",
+                                                           "EndTrigger":  "_XFTRIGGER(Process.48!EventXFMod)",
+                                                           "EndXTrigger":  null,
+                                                           "GlueType":  "2",
+                                                           "ObjType":  "2",
+                                                           "ShapeRouteStyle":  "0",
+                                                           "ConLineRouteExt":  "0",
+                                                           "ConFixedCode":  "3",
+                                                           "BegPrompt":  null,
+                                                           "EndPrompt":  null,
+                                                           "DirX":  null,
+                                                           "DirY":  null,
+                                                           "Type":  null
+                                                       }
+                                         },
+                                         {
+                                             "name":  "Dynamic connector.64",
+                                             "id":  59,
+                                             "one_d":  -1,
+                                             "master":  "Dynamic connector",
+                                             "cells":  {
+                                                           "BeginX":  "PAR(PNT(Process!Connections.X3,Process!Connections.Y3))",
+                                                           "BeginY":  "PAR(PNT(Process!Connections.X3,Process!Connections.Y3))",
+                                                           "EndX":  "PAR(PNT(Decision!Connections.X3,Decision!Connections.Y3))",
+                                                           "EndY":  "PAR(PNT(Decision!Connections.X3,Decision!Connections.Y3))",
+                                                           "BegTrigger":  "_XFTRIGGER(Process!EventXFMod)",
+                                                           "EndTrigger":  "_XFTRIGGER(Decision!EventXFMod)",
+                                                           "EndXTrigger":  null,
+                                                           "GlueType":  "2",
+                                                           "ObjType":  "2",
+                                                           "ShapeRouteStyle":  "0",
+                                                           "ConLineRouteExt":  "0",
+                                                           "ConFixedCode":  "0",
+                                                           "BegPrompt":  null,
+                                                           "EndPrompt":  null,
+                                                           "DirX":  null,
+                                                           "DirY":  null,
+                                                           "Type":  null
+                                                       }
+                                         },
+                                         {
+                                             "name":  "Dynamic connector.65",
+                                             "id":  60,
+                                             "one_d":  -1,
+                                             "master":  "Dynamic connector",
+                                             "cells":  {
+                                                           "BeginX":  "_WALKGLUE(BegTrigger,EndTrigger,WalkPreference)",
+                                                           "BeginY":  "_WALKGLUE(BegTrigger,EndTrigger,WalkPreference)",
+                                                           "EndX":  "_WALKGLUE(EndTrigger,BegTrigger,WalkPreference)",
+                                                           "EndY":  "_WALKGLUE(EndTrigger,BegTrigger,WalkPreference)",
+                                                           "BegTrigger":  "_XFTRIGGER(Process.49!EventXFMod)",
+                                                           "EndTrigger":  "_XFTRIGGER(Process.48!EventXFMod)",
+                                                           "EndXTrigger":  null,
+                                                           "GlueType":  "2",
+                                                           "ObjType":  "2",
+                                                           "ShapeRouteStyle":  "0",
+                                                           "ConLineRouteExt":  "0",
+                                                           "ConFixedCode":  "6",
+                                                           "BegPrompt":  null,
+                                                           "EndPrompt":  null,
+                                                           "DirX":  null,
+                                                           "DirY":  null,
+                                                           "Type":  null
+                                                       }
+                                         },
+                                         {
+                                             "name":  "Start/End.66",
+                                             "id":  61,
+                                             "one_d":  0,
+                                             "master":  "Start/End",
+                                             "text":  "End",
+                                             "container":  null,
+                                             "cells":  {
+
+                                                       }
+                                         },
+                                         {
+                                             "name":  "Dynamic connector.67",
+                                             "id":  62,
+                                             "one_d":  -1,
+                                             "master":  "Dynamic connector",
+                                             "cells":  {
+                                                           "BeginX":  "_WALKGLUE(BegTrigger,EndTrigger,WalkPreference)",
+                                                           "BeginY":  "_WALKGLUE(BegTrigger,EndTrigger,WalkPreference)",
+                                                           "EndX":  "PAR(PNT(\u0027Start/End.66\u0027!Connections.X2,\u0027Start/End.66\u0027!Connections.Y2))",
+                                                           "EndY":  "PAR(PNT(\u0027Start/End.66\u0027!Connections.X2,\u0027Start/End.66\u0027!Connections.Y2))",
+                                                           "BegTrigger":  "_XFTRIGGER(Process.48!EventXFMod)",
+                                                           "EndTrigger":  "_XFTRIGGER(\u0027Start/End.66\u0027!EventXFMod)",
+                                                           "EndXTrigger":  null,
+                                                           "GlueType":  "2",
+                                                           "ObjType":  "2",
+                                                           "ShapeRouteStyle":  "0",
+                                                           "ConLineRouteExt":  "0",
+                                                           "ConFixedCode":  "0",
+                                                           "BegPrompt":  null,
+                                                           "EndPrompt":  null,
+                                                           "DirX":  null,
+                                                           "DirY":  null,
+                                                           "Type":  null
+                                                       }
+                                         },
+                                         {
+                                             "name":  "Dynamic connector.68",
+                                             "id":  63,
+                                             "one_d":  -1,
+                                             "master":  "Dynamic connector",
+                                             "cells":  {
+                                                           "BeginX":  "PAR(PNT(Decision!Connections.X4,Decision!Connections.Y4))",
+                                                           "BeginY":  "PAR(PNT(Decision!Connections.X4,Decision!Connections.Y4))",
+                                                           "EndX":  "_WALKGLUE(EndTrigger,BegTrigger,WalkPreference)",
+                                                           "EndY":  "_WALKGLUE(EndTrigger,BegTrigger,WalkPreference)",
+                                                           "BegTrigger":  "_XFTRIGGER(Decision!EventXFMod)",
+                                                           "EndTrigger":  "_XFTRIGGER(Process.49!EventXFMod)",
+                                                           "EndXTrigger":  null,
+                                                           "GlueType":  "2",
+                                                           "ObjType":  "2",
+                                                           "ShapeRouteStyle":  "0",
+                                                           "ConLineRouteExt":  "0",
+                                                           "ConFixedCode":  "0",
+                                                           "BegPrompt":  null,
+                                                           "EndPrompt":  null,
+                                                           "DirX":  null,
+                                                           "DirY":  null,
+                                                           "Type":  null
+                                                       }
+                                         },
+                                         {
+                                             "name":  "Sheet.109",
+                                             "id":  109,
+                                             "one_d":  0,
+                                             "master":  null,
+                                             "text":  "",
+                                             "container":  null,
+                                             "cells":  {
+
+                                                       }
+                                         },
+                                         {
+                                             "name":  "Process.110",
+                                             "id":  110,
+                                             "one_d":  0,
+                                             "master":  "Process",
+                                             "text":  "",
+                                             "container":  null,
+                                             "cells":  {
+
+                                                       }
+                                         }
+                                     ],
+                          "notes":  "template=CFF_HORIZONTAL_M.VSTX; stencil open: BASFLO_M.vssx masters=15; stencil open: XFUNC_M.vssx masters=7; lane=CFF Container style=1 locked=True;   master: Process;   master: Decision;   master: Subprocess;   master: Start/End;   master: Document;   master: Data;   master: Database;   master: External Data;   master: Custom 1;   master: Custom 2;   master: Custom 3;   master: Custom 4;   master: On-page reference;   master: Off-page reference;   master: Dynamic connector; dropped Process.110; AddMember failed: Cannot find an overload for \"AddMember\" and the argument count: \"1\"; InsertRow failed: Method invocation failed because [System.__ComObject] does not contain a method named \u0027InsertRow\u0027."
+                      },
+                      {
+                          "scenario":  "s06_basflow_stencils",
+                          "file":  "s06_basflow_stencils.vsdx",
+                          "shapes":  {
+
+                                     },
+                          "notes":  "template=BASFLO_M.vstx; top shapes=0"
+                      }
+                  ]
+}
