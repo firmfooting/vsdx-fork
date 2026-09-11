@@ -82,6 +82,24 @@ result and shows the membership (manual COM check script provided).
 - [ ] every WI above adds pytest cases using the com_reference fixtures
 - [ ] Visio open-check harness (`tools/visio_check.ps1`) for local ground-truth validation
 
+### WI-6 — master-import (P0, next)
+
+Extract a working "import master into document" path so `Connect.create()`
+(and any master-based shape drop) works on documents that carry their own
+masters: copy `master<N>.xml`, update `masters.xml` (+rels), content types,
+and the page rels. Lifts the strict-xfail on the test3_house/test4 params.
+**Blocks the upstream corruption-fix PR**: the surgical dedupe-only diff
+routes own-masters documents into the broken `elif` branch (9 test failures
+on upstream's engine) — the fix must land together with master-import.
+
+## Upstream posture (decided 2026-09-11)
+
+Fork-forward for capability; staged small PRs for universal bugs.
+- Issues filed upstream: #93 (corruption/duplicate masters), #94 (curved_connector).
+- PR #95 open upstream: curved-connector one-liner (probe for maintainer responsiveness).
+- Corruption fix PR waits on WI-6 (see above).
+- Full recon: `.hermes/recon/upstream-connector-notes.md`.
+
 ## Conventions
 
 - Branch per work item off `main` (named `feat/<wi>-<slug>`), single-concern commits
