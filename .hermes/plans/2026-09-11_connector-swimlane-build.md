@@ -67,12 +67,35 @@ Accept: delete_shape on a connected shape leaves a valid, openable file. **Met**
 
 Accept: `create_shape('Decision', ...)` produces a real decision diamond.
 
-### WI-4 — swimlanes / containers (P1)
+### WI-4 — swimlanes / containers (P1, in progress)
 
-- [ ] container membership cells (`msvSD*`) written correctly for member shapes
-- [ ] `Page.add_swimlane(...)` — insert lane into a CFF document
-- [ ] `Page.add_shape_to_lane(shape, lane)` — set membership cells
-- [ ] fixture: s05_swimlanes_cfflow.vsdx used as base template for tests
+Ground truth source: `tests/fixtures/com_reference/s05_swimlanes_cfflow.vsdx`
+(real Visio CFF capture). No cell name may be written from plausibility.
+
+- [ ] 4a inspect s05: dump User cells + geometry for CFF Container, Swimlane
+  List, Swimlane lanes, Phase List, Separator, and Processes inside vs outside
+  lanes; identify the exact membership representation
+- [ ] 4b DRY prerequisites (separate commit): lift `Connect._get_or_create_cell`
+  to `Shape.get_or_create_cell` (single cell-write primitive); shared
+  `tests/conftest.py` fixture-copy helper (stop per-module `get_copy` copies)
+- [ ] 4c `vsdx/containers.py`: `Container` wrapper (discovery, members,
+  add_member); `Page.add_swimlane(label)` (clone last lane, shift geometry per
+  `msvSDListDirection`); `Page.add_shape_to_lane(shape, lane)`. Page methods
+  are thin facades, matching the connect_shapes→Connect.create pattern
+- [ ] 4d tests: membership cells present, lane clone geometry, label set,
+  package validity; cross-document lane creation reuses master-import
+- [ ] 4e Visio validation: extend `tools/visio_check.ps1` with container
+  membership reporting (no second harness)
+
+DRY rules for this work item:
+1. one cell-write primitive (`Shape.get_or_create_cell`) — no second
+   cell-creation path
+2. one membership-semantics implementation (`containers.py`); Page methods
+   delegate
+3. any cross-document shape/master movement flows through
+   `_ensure_masters_for_shape` — zero new package-wiring code
+4. shared test fixture helper in `conftest.py`
+5. extend the existing Visio harness; never a parallel one
 
 Accept: open s05 fixture, add a shape to lane 2, add a lane; Visio opens the
 result and shows the membership (manual COM check script provided).
