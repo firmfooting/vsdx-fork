@@ -96,7 +96,7 @@ class Connect:
                 # assume same if is ok, todo: use names for match and increment IDs
                 media_style = media._media_vsdx._get_style_by_id(connector_shape.master_shape.line_style_id)
                 page.vis._style_sheets().append(media_style)
-            media._media_vsdx.close_vsdx()
+            media.close()
 
             # wire glue to the from/to shapes (Visio-faithful formulas, see
             # tests/fixtures/com_reference/manifest.json for ground truth)
@@ -200,6 +200,43 @@ class Connect:
         page = connector_shape.page
         page.add_connect(Connect(xml=ET.fromstring(end_connect), page=page))
         page.add_connect(Connect(xml=ET.fromstring(beg_connect), page=page))
+
+    @staticmethod
+    def retarget(page: 'vsdx.Page', connector_shape: Shape, from_shape: Shape = None,
+                 to_shape: Shape = None, route: str = 'dynamic',
+                 from_cp: int = 0, to_cp: int = 0) -> Shape:
+        """Retarget an existing connector to new endpoints.
+
+        Only the ends provided are moved; the other end keeps its current
+        glue (resolved from the page's existing Connect records). Reuses
+        _apply_glue for cells and records — removal of the old records goes
+        through the page's single record-removal path.
+
+        :returns: the connector Shape
+        """
+        current_from = current_to = None
+        current_from_cp = current_to_cp = 0
+        for connect in page.connects:
+            if connect.from_id == str(connector_shape.ID):
+                if connect.from_rel == 'BeginX':
+                    current_from = page.find_shape_by_id(connect.to_id)
+                    if connect.to_rel and connect.to_rel.startswith('Connections'):
+                        current_from_cp = int(connect.to_rel.rsplit('.', 1)[1]) - 1
+                elif connect.from_rel == 'EndX':
+                    current_to = page.find_shape_by_id(connect.to_id)
+                    if connect.to_rel and connect.to_rel.startswith('Connections'):
+                        current_to_cp = int(connect.to_rel.rsplit('.', 1)[1]) - 1
+        new_from = from_shape if from_shape is not None else current_from
+        new_to = to_shape if to_shape is not None else current_to
+        if new_from is None or new_to is None:
+            raise ValueError('connector has no resolvable endpoints to keep')
+
+        page.remove_connect_records([connector_shape.ID])
+        Connect._apply_glue(connector_shape, new_from, new_to, route=route,
+                            from_cp=from_cp if from_shape is not None else current_from_cp,
+                            to_cp=to_cp if to_shape is not None else current_to_cp)
+        connector_shape.set_start_and_finish(new_from.center_x_y, new_to.center_x_y)
+        return connector_shape
 
     @property
     def shape_id(self):

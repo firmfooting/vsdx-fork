@@ -1083,6 +1083,47 @@ class VisioFile:
     def get_shape_id(shape: ET) -> str:
         return shape.attrib['ID']
 
+    def create_shape(self, page: Page, palette_name: str, x: float, y: float,
+                     w: float = None, h: float = None, text: str = None) -> Shape:
+        """Create a new shape on a page from the extended shape palette.
+
+        Palette shapes are deliberately masterless, so creation needs no
+        master-import and works on any document. Reuses copy_shape and the
+        existing position/size setters (no second copy or id-rewrite path).
+
+        :param page: destination page
+        :param palette_name: sentinel name, e.g. 'PALETTE_PROCESS',
+            'PALETTE_DECISION', 'PALETTE_START_END', 'PALETTE_PARALLELOGRAM',
+            'PALETTE_DATABASE'
+        :param x, y: centre position of the new shape
+        :param w, h: optional width/height overrides
+        :param text: label text; the palette sentinel name is cleared when None
+        :return: the new Shape
+        """
+        media = vsdx.Media()
+        try:
+            source = media.palette.pages[0].find_shape_by_text(palette_name)
+            if source is None:
+                raise ValueError(f'palette has no shape named {palette_name}')
+            new_shape_xml = self.copy_shape(source.xml, page)
+        finally:
+            media.close()
+        new_shape = page.find_shape_by_id(new_shape_xml.attrib['ID'])
+
+        # palette shapes are drawn around their centre: position via PinX/PinY
+        new_shape.get_or_create_cell('PinX', v=str(x))
+        new_shape.get_or_create_cell('PinY', v=str(y))
+        if w is not None:
+            new_shape.width = w
+        if h is not None:
+            new_shape.height = h
+        if text is not None:
+            new_shape.text = text
+        else:
+            new_shape.text = ''
+        return new_shape
+
+
     def increment_sub_shape_ids(self, shape: Shape, page, id_map: dict = None):
         id_map = self.increment_shape_ids(shape.xml, page, id_map)
         self.update_ids(shape.xml, id_map)

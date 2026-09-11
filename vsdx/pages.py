@@ -392,6 +392,18 @@ class Page:
             raise ValueError('page has no CFF Container')
         container.add_shape_to_lane(shape, lane)
 
+    def reanchor_connector(self, connector_shape: Shape, from_shape: Shape = None,
+                           to_shape: Shape = None, route: str = 'dynamic',
+                           from_cp: int = 0, to_cp: int = 0) -> Shape:
+        """Retarget an existing connector to new endpoints (either end may be
+        kept by passing None).
+
+        :returns: the connector Shape
+        """
+        return vsdx.Connect.retarget(page=self, connector_shape=connector_shape,
+                                     from_shape=from_shape, to_shape=to_shape,
+                                     route=route, from_cp=from_cp, to_cp=to_cp)
+
     def delete_shape(self, shape: Shape):
         """Delete a shape from this page, removing any incident connectors.
 
@@ -416,12 +428,22 @@ class Page:
     def _remove_shape_xml(self, shape: Shape):
         """Remove a shape's xml, its Connect records, and (if 1-D) its connectors' records."""
         sid = str(shape.ID)
-        connects_el = self.xml.find(f'.//{namespace}Connects')
-        if connects_el is not None:
-            for connect in list(connects_el):
-                if connect.attrib.get('FromSheet') == sid or connect.attrib.get('ToSheet') == sid:
-                    connects_el.remove(connect)
+        self.remove_connect_records({sid})
         for shapes_el in self.xml.iter(f'{namespace}Shapes'):
             if shape.xml in list(shapes_el):
                 shapes_el.remove(shape.xml)
                 break
+
+    def remove_connect_records(self, connector_ids):
+        """Remove all Connect records whose FromSheet is one of connector_ids.
+
+        Single record-removal path, shared by the delete cascade and
+        connector retargeting.
+        """
+        ids = {str(i) for i in connector_ids}
+        connects_el = self.xml.find(f'.//{namespace}Connects')
+        if connects_el is None:
+            return
+        for connect in list(connects_el):
+            if connect.attrib.get('FromSheet') in ids:
+                connects_el.remove(connect)
