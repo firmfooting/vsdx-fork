@@ -16,6 +16,10 @@ from xml.etree.ElementTree import Element, ElementTree
 import copy as copy_module
 import xml.dom.minidom as minidom   # minidom used for prettyprint
 
+from .logging_support import attach_debug_stream_handler, get_logger
+
+logger = get_logger(__name__)
+
 import vsdx
 from .pages import Page
 from .pages import PagePosition
@@ -78,7 +82,8 @@ class VisioFile:
         self.debug = debug
         self.filename = filename
         if debug:
-            print(f"VisioFile(filename={filename})")
+            attach_debug_stream_handler()
+        logger.debug("VisioFile(filename=%s)", filename)
         file_type = self.filename.split('.')[-1]  # last text after dot
         if not file_type.lower() == 'vsdx' and not file_type.lower() == 'vsdm':
             raise TypeError(f'Invalid File Type:{file_type}')
@@ -159,7 +164,7 @@ class VisioFile:
         rels = file_to_xml(rel_filename, self.zip_file_contents).getroot()  # rels contains page filenames
         self.pages_xml_rels = file_to_xml(rel_filename, self.zip_file_contents)  # store pages.xml.rels so pages can be added or removed
         if self.debug:
-            print(f"Relationships({rel_filename})", VisioFile.pretty_print_element(rels))
+            logger.debug("Relationships(%s)\n%s", rel_filename, VisioFile.pretty_print_element(rels))
         relid_page_dict = {}
 
         for rel in rels:
@@ -171,7 +176,7 @@ class VisioFile:
         pages = file_to_xml(pages_filename, self.zip_file_contents).getroot()  # this contains a list of pages with rel_id and filename
         self.pages_xml = file_to_xml(pages_filename, self.zip_file_contents)  # store xml so pages can be removed
         if self.debug:
-            print(f"Pages({pages_filename})", VisioFile.pretty_print_element(pages))
+            logger.debug("Pages(%s)\n%s", pages_filename, VisioFile.pretty_print_element(pages))
 
         for page in pages:  # type: Element
             rel_id = page.find(f"{namespace}Rel").attrib[f"{r_namespace}id"]
@@ -191,7 +196,7 @@ class VisioFile:
             self.pages.append(new_page)
 
             if self.debug:
-                print(f"Page({new_page.filename})", VisioFile.pretty_print_element(new_page.xml.getroot()))
+                logger.debug("Page(%s)\n%s", new_page.filename, VisioFile.pretty_print_element(new_page.xml.getroot()))
 
         self.content_types_xml = file_to_xml(f'{self.directory}/[Content_Types].xml', self.zip_file_contents)
         # TODO: add correctness cross-check. Or maybe the other way round, start from [Content_Types].xml
@@ -208,7 +213,7 @@ class VisioFile:
         master_rels_data = file_to_xml(master_rel_path, self.zip_file_contents)
         master_rels = master_rels_data.getroot() if master_rels_data else []
         if self.debug:
-            print(f"Master Relationships({master_rel_path})", VisioFile.pretty_print_element(master_rels))
+            logger.debug("Master Relationships(%s)\n%s", master_rel_path, VisioFile.pretty_print_element(master_rels))
 
         # populate relid to master path
         relid_to_path = {}
@@ -239,7 +244,7 @@ class VisioFile:
             self.master_index[master_name] = master_page  # index by master_name
 
             if self.debug:
-                print(f"Master({master_path}, id={master_id})", VisioFile.pretty_print_element(master_page.xml.getroot()))
+                logger.debug("Master(%s, id=%s)\n%s", master_path, master_id, VisioFile.pretty_print_element(master_page.xml.getroot()))
 
         return
 
@@ -658,7 +663,7 @@ class VisioFile:
 
     def _remove_page_from_app_xml(self, page_name: str):
         if self.app_xml is not None:
-            print(f"_remove_page_from_app_xml()")
+            logger.debug("_remove_page_from_app_xml()")
             HeadingPairs = self.app_xml.getroot().find(f'{ext_prop_namespace}HeadingPairs')
             i4 = HeadingPairs.find(f'.//{vt_namespace}i4')
             num_pages = int(i4.text)
@@ -957,7 +962,7 @@ class VisioFile:
                 pages_to_remove.append(page)
         # remove pages after processing
         for p in pages_to_remove:
-            print(f"Removing page:'{p.name}' index:{p.index_num}")
+            logger.debug("Removing page:'%s' index:%s", p.name, p.index_num)
             self.remove_page_by_index(p.index_num)
 
     @staticmethod
@@ -1070,9 +1075,10 @@ class VisioFile:
             template = Template(template_source)  # value might be '{{ 1.0+2.4*3 }}'
             value = template.render(context)
             # is the value truthy - i.e. not 0, False, or empty string, tuple, list or dict
-            print(f"jinja_page_showif(context={context}) statement: {template_source} returns: {type(value)} {value}")
+            logger.debug("jinja_page_showif(context=%s) statement: %s returns: %s %s",
+                         context, template_source, type(value), value)
             if value in ['False', '0', '', '()', '[]', '{}']:
-                print("value in ['False', '0', '', '()', '[]', '{}']")
+                logger.debug("value in ['False', '0', '', '()', '[]', '{}']")
                 return False  # page should be hidden
             # remove jinja statement from page name
             jinja_statement = re.match("{%.*?%}", page.name)[0]

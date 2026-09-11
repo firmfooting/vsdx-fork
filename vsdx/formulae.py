@@ -1,6 +1,10 @@
 import math
 from vsdx import Shape
 
+from .logging_support import get_logger
+
+logger = get_logger(__name__)
+
 
 def width_x_1(shape: Shape):
     return shape.width
@@ -77,4 +81,4 @@ def calc_value(shape: Shape, func_text: str):
         return f(shape=shape)
     elif shape.page.vis.debug:
         # show any non-matching formulae
-        print(f"calc_value(func_text='{func_text}') no method found")
+        logger.debug("calc_value(func_text='%s') no method found", func_text)

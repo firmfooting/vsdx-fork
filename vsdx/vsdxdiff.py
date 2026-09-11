@@ -3,6 +3,10 @@ import zipfile
 import shutil
 import os
 
+from .logging_support import get_logger
+
+logger = get_logger(__name__)
+
 
 class VisioFileDiff:
     """Compares two vsdx files
@@ -105,14 +109,14 @@ class VisioFileDiff:
                     #print(f"Opened and read contents of {extracted_file_path}")
             except UnicodeDecodeError as e:
                 file_contents[extracted_file_path] = "Unable to decode file."
-                print(f"Failed to read file: {full_path}")
+                logger.warning("Failed to read file: %s", full_path)
             except PermissionError as e:
                 file_contents[extracted_file_path] = "Unable to open file."
-                print(f"Failed to open file (PermissionError): {full_path}")
+                logger.warning("Failed to open file (PermissionError): %s", full_path)
         try:
             # Remove extracted folder
             shutil.rmtree(directory)
         except (FileNotFoundError, PermissionError) as e:
-            print(f"Error shutil.rmtree({directory}) {e}")
+            logger.warning("Error shutil.rmtree(%s) %s", directory, e)
 
         return file_contents

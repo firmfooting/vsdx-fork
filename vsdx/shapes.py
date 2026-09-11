@@ -13,6 +13,10 @@ import deprecation
 import vsdx
 from vsdx import namespace
 
+from .logging_support import get_logger
+
+logger = get_logger(__name__)
+
 shape_type_names = {  # a map from English language shape to a list of know names for that Shape type
     # note that Shape names may be appended with a number e.g. 'Dynamischer Verbinder.2'
     'Dynamic Connector': ['dynamic connector', 'dynamischer verbinder']
@@ -343,7 +347,7 @@ class Shape:
             # copy master if master has this Cell (this will default same formula)
             master_cell_xml = self.master_shape.xml.find(f'{namespace}Cell[@N="{name}"]')
             if master_cell_xml is not None:  # use master Cell if found
-                print("creating cell from:", ET.tostring(master_cell_xml))
+                logger.debug("creating cell from: %s", ET.tostring(master_cell_xml))
                 cell_xml = ET.fromstring(ET.tostring(master_cell_xml))
         if cell_xml is None:  # create a new Cell
             cell_xml = ET.fromstring(f'<Cell xmlns="{namespace[1:-1]}" N="{name}" />')
@@ -366,7 +370,7 @@ class Shape:
             # copy master if master has this Cell (this will default same value)
             master_cell_xml = self.master_shape.xml.find(f'{namespace}Cell[@N="{name}"]')
             if master_cell_xml is not None:  # use master Cell if found
-                print("creating cell from:", ET.tostring(master_cell_xml))
+                logger.debug("creating cell from: %s", ET.tostring(master_cell_xml))
                 cell_xml = ET.fromstring(ET.tostring(master_cell_xml))
         if cell_xml is None:  # create a new Cell
             cell_xml = ET.fromstring(f'<Cell xmlns:ns0="{namespace[1:-1]}" N="{name}" />')

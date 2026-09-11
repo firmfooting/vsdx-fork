@@ -4,6 +4,10 @@ from xml.etree.ElementTree import Element
 
 import vsdx
 
+from .logging_support import get_logger
+
+logger = get_logger(__name__)
+
 namespace = "{http://schemas.microsoft.com/office/visio/2012/main}"  # visio file name space
 
 
@@ -44,11 +48,11 @@ class Geometry:
     def move(self, x_delta: float, y_delta: float):
         # update any absolute references to co-ordinates
         for r in self.rows.values():  # type: GeometryRow
-            print(f"r={type(r)} {r}")
+            logger.debug("r=%s %s", type(r), r)
             if r.row_type.lower() in ['moveto', 'lineto']:  # todo: include other absolute row types
                 r.x = r.x + x_delta if type(r.x) is float else None
                 r.y = r.y + y_delta if type(r.y) is float else None
-                print(f"r={type(r)} {r} after move {x_delta}, {y_delta}")
+                logger.debug("r=%s %s after move %s, %s", type(r), r, x_delta, y_delta)
 
     def set_move_to(self, x: int, y: int, move_to_index: int=0):
         move_tos = [r for r in self.rows.values() if r.row_type.lower() == 'moveto']
@@ -57,7 +61,7 @@ class Geometry:
             move_to = move_tos[move_to_index]  # type: GeometryRow
             if move_to.geometry.shape.master_page_ID != self.shape.master_page_ID:
                 move_to = GeometryRow(geometry=self, xml=None, master_geometry_row=move_to, T='MoveTo', IX=move_to.index)
-                print(f"set_move_to() created: {move_to}")
+                logger.debug("set_move_to() created: %s", move_to)
             move_to.x = x
             move_to.y = y
             #print(f"move_to[{move_to_index}]={move_to.x},{move_to.y}")
@@ -69,7 +73,7 @@ class Geometry:
             line_to = line_tos[line_to_index]  # type: GeometryRow
             if line_to.geometry.shape.master_page_ID != self.shape.master_page_ID:
                 line_to = GeometryRow(geometry=self, xml=None, master_geometry_row=line_to, T='LineTo', IX=line_to.index)
-                print(f"set_line_to() created: {line_to}")
+                logger.debug("set_line_to() created: %s", line_to)
             line_to.x = x
             line_to.y = y
             #print(f"line_to[{line_to_index}]={line_to.x},{line_to.y}")
@@ -136,7 +140,7 @@ class GeometryRow:
         if not x_cell or (type(x_cell.parent) is GeometryRow and x_cell.parent.geometry.shape.master_page_ID!=self.geometry.shape.master_page_ID):
             # create new cell if none exists, or if existing cell is from master shape
             x_cell = GeometryCell(parent=self, xml=None, name='X', value=value)
-            print(f"x_cell={x_cell}")
+            logger.debug("x_cell=%s", x_cell)
         x_cell.value = value
 
     @property
@@ -150,7 +154,7 @@ class GeometryRow:
         if not y_cell or (type(y_cell.parent) is GeometryRow and y_cell.parent.geometry.shape.master_page_ID != self.geometry.shape.master_page_ID):
             # create new cell if none exists, or if existing cell is from master shape
             y_cell = GeometryCell(parent=self, xml=None, name='Y', value=value)
-            print(f"y_cell={y_cell}")
+            logger.debug("y_cell=%s", y_cell)
         y_cell.value = value
 
     @property
