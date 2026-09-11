@@ -13,6 +13,9 @@ from xml.etree.ElementTree import Element
 from jinja2 import Template
 
 from .logging_support import attach_debug_stream_handler, get_logger
+from .masters import MastersImportMixin
+from .templating import JinjaTemplatingMixin
+from .xmlio import file_to_xml, xml_to_file
 
 logger = get_logger(__name__)
 
@@ -30,28 +33,13 @@ ET.register_namespace("", document_rels_namespace[1:-1])
 ET.register_namespace("", cont_types_namespace[1:-1])
 
 
-def file_to_xml(filename: str, zip_file_contents: dict = None) -> ET.ElementTree:
-    """Import a file as an ElementTree"""
-    if filename in zip_file_contents:
-        content: io.BytesIO = zip_file_contents[filename]
-        tree = ET.parse(io.BytesIO(content.getvalue()))
-        return tree
-
-
-def xml_to_file(xml: ET.ElementTree, filename: str, zip_file_contents: dict = None):
-    """Save an ElementTree to zip_file_contents"""
-    file: io.BytesIO = io.BytesIO()
-    xml.write(file, xml_declaration=True, method="xml", encoding="UTF-8")
-    zip_file_contents[filename] = io.BytesIO(file.getvalue())
-
-
 class VisioFileNotOpen(BaseException):
     """Error class to report when a VisioFile is attempted to be saved when no longer open"""
 
     pass
 
 
-class VisioFile:
+class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
     """Represents a vsdx file
 
     :param filename: filename the :class:`VisioFile` was created from
@@ -286,153 +274,6 @@ class VisioFile:
             if m.page_id == id:
                 return m
 
-    def _ensure_masters_for_shape(self, source_shape: Shape) -> str:
-        """Ensure this document contains the master that source_shape uses.
-
-        Call with the SOURCE shape (still attached to its original document)
-        BEFORE copying it into this document. Master identity is by NAME
-        (NameU), matching Visio's MatchByName semantics: numeric master IDs
-        are per-document and coincide across documents by chance.
-
-        :param source_shape: the shape in its source document
-        :return: the logical master ID the copied shape should reference in
-                 this document ('' when the shape references no master or the
-                 source reference is dangling)
-        """
-        src_vis = source_shape.page.vis
-        master_ref = source_shape.xml.attrib.get("Master")
-        if not master_ref:
-            return ""  # shape has no master - nothing to import
-        src_masters = src_vis.masters_xml
-        if src_masters is None or isinstance(src_masters, list):
-            return ""  # source document has no masters part
-
-        # locate the source Master element by numeric ID within the source doc
-        source_element = None
-        for m in src_masters:
-            if m.attrib.get("ID") == master_ref:
-                source_element = m
-                break
-        if source_element is None:
-            return ""  # dangling reference - drop rather than corrupt
-
-        master_name = source_element.attrib.get("NameU") or source_element.attrib.get("Name") or ""
-
-        # already present in this document, by name?
-        existing = self.master_index.get(master_name)
-        if existing is not None:
-            return str(existing.page_id)
-
-        source_master_page = src_vis.get_master_page_by_id(master_ref)
-        if source_master_page is None or source_master_page.filename not in src_vis.zip_file_contents:
-            return ""
-
-        # 1. copy the master part bytes under the next free filename
-        prefix = f"{self._masters_folder}/master"
-        existing_numbers = [
-            int(f[len(prefix) : -4])
-            for f in self.zip_file_contents
-            if f.startswith(prefix) and f.endswith(".xml") and f[len(prefix) : -4].isdigit()
-        ]
-        next_num = max(existing_numbers, default=0) + 1
-        part_name = f"master{next_num}.xml"
-        part_path = f"{self._masters_folder}/{part_name}"
-        self.zip_file_contents[part_path] = src_vis.zip_file_contents[source_master_page.filename]
-
-        # 2. ensure this document has a masters.xml to append to
-        if self.masters_xml is None or isinstance(self.masters_xml, list):
-            self._bootstrap_masters()
-
-        # 3. append the Master element with a fresh logical ID
-        numeric_ids = [int(m.attrib["ID"]) for m in self.masters_xml if str(m.attrib.get("ID", "")).isdigit()]
-        new_id = max(numeric_ids, default=1) + 1
-        if new_id < 2:
-            new_id = 2
-        new_master_element = copy_module.deepcopy(source_element)
-        new_master_element.attrib["ID"] = str(new_id)
-        new_rel_id = f"rId{next_num}"
-        rel_el = new_master_element.find(f"{namespace}Rel")
-        if rel_el is not None:
-            rel_el.attrib[f"{r_namespace}id"] = new_rel_id
-        self.masters_xml.append(new_master_element)
-        # persist masters.xml (save_vsdx does not write it)
-        xml_to_file(ET.ElementTree(self.masters_xml), f"{self._masters_folder}/masters.xml", self.zip_file_contents)
-
-        # 4. masters.xml.rels: map the new rel id -> part filename
-        master_rels_path = f"{self._masters_folder}/_rels/masters.xml.rels"
-        rels_tree = file_to_xml(master_rels_path, self.zip_file_contents)
-        rels_root = rels_tree.getroot() if rels_tree is not None else None
-        if rels_root is not None:
-            existing_targets = {r.attrib.get("Target") for r in rels_root}
-            while part_name in existing_targets:  # never clobber an existing mapping
-                next_num += 1
-                part_name = f"master{next_num}.xml"
-                new_rel_id = f"rId{next_num}"
-            rel_el = new_master_element.find(f"{namespace}Rel")
-            if rel_el is not None:
-                rel_el.attrib[f"{r_namespace}id"] = new_rel_id
-        else:
-            rels_root = ET.fromstring('<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>')
-        rels_root.append(
-            Element(
-                f"{document_rels_namespace}Relationship",
-                {
-                    "Id": new_rel_id,
-                    "Type": "http://schemas.microsoft.com/visio/2010/relationships/master",
-                    "Target": part_name,
-                },
-            )
-        )
-        xml_to_file(ET.ElementTree(rels_root), master_rels_path, self.zip_file_contents)
-
-        # keep the copied part path in sync with any collision rename
-        final_part_path = f"{self._masters_folder}/{part_name}"
-        if final_part_path != part_path:
-            self.zip_file_contents[final_part_path] = self.zip_file_contents.pop(part_path)
-
-        # 5. package wiring (helpers are idempotent); PartName paths are
-        # archive-relative, never absolute
-        self._add_content_types_override(
-            part_name_path="/visio/masters/masters.xml", content_type="application/vnd.ms-visio.masters+xml"
-        )
-        self._add_content_types_override(
-            part_name_path=f"/visio/masters/{part_name}", content_type="application/vnd.ms-visio.master+xml"
-        )
-        self._add_document_rel(
-            rel_type="http://schemas.microsoft.com/visio/2010/relationships/masters", target="masters/masters.xml"
-        )
-
-        # 6. register the new master directly - a full load_master_pages()
-        # reload would re-append every existing master to master_pages
-        new_master_page = Page(
-            file_to_xml(final_part_path, self.zip_file_contents), final_part_path, master_name, str(new_id), new_rel_id, self
-        )
-        new_master_page.master_unique_id = new_master_element.attrib.get("UniqueID")
-        new_master_page.master_base_id = new_master_element.attrib.get("BaseID")
-        self.master_pages.append(new_master_page)
-        self.master_index[master_name] = new_master_page
-        return str(new_id)
-
-    def _bootstrap_masters(self):
-        """Create an empty masters part + wiring for documents without masters."""
-        masters_root = ET.fromstring(
-            '<Masters xmlns="http://schemas.microsoft.com/office/visio/2012/main" '
-            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/>'
-        )
-        self.masters_xml = masters_root
-        self.zip_file_contents[f"{self._masters_folder}/masters.xml"] = io.BytesIO(
-            ET.tostring(masters_root, xml_declaration=True, encoding="UTF-8")
-        )
-        self.zip_file_contents[f"{self._masters_folder}/_rels/masters.xml.rels"] = io.BytesIO(
-            b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'
-            b'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>'
-        )
-        self._add_content_types_override(
-            part_name_path="/visio/masters/masters.xml", content_type="application/vnd.ms-visio.masters+xml"
-        )
-        self._add_document_rel(
-            rel_type="http://schemas.microsoft.com/visio/2010/relationships/masters", target="masters/masters.xml"
-        )
 
     def remove_page_by_index(self, index: int):
         """Remove zero-based nth page from VisioFile object
@@ -933,174 +774,6 @@ class VisioFile:
         for shape in shapes.findall(f"{namespace}Shape"):
             _replace_shape_text(shape, context)
 
-    def jinja_render_vsdx(self, context: dict):
-        """Transform a template VisioFile object using the Jinja language
-        The method updates the VisioFile object loaded from the template file, so does not return any value
-        Note: vsdx specific extensions are available such as `{% for item in list %}` statements with no `{% endfor %}`
-
-        :param context: A dictionary containing values that can be accessed by the Jinja processor
-        :type context: dict
-
-        :return: None
-        """
-        # parse each shape in each page as Jinja2 template with context
-        pages_to_remove = []  # list of pages to be removed after loop
-        for page in self.pages:  # type: Page
-            # check if page should be removed
-            if VisioFile.jinja_page_showif(page, context):
-                loop_shape_ids = list()
-                for shapes_by_id in page._shapes:  # type: Shape
-                    VisioFile.jinja_render_shape(shape=shapes_by_id, context=context, loop_shape_ids=loop_shape_ids)
-
-                source = ET.tostring(page.xml.getroot(), encoding="unicode")
-                source = VisioFile.unescape_jinja_statements(source)  # unescape chars like < and > inside {%...%}
-                template = Template(source)
-                output = template.render(context)
-                page.xml = ET.ElementTree(ET.fromstring(output))  # create ElementTree from Element created from output
-
-                # update loop shape IDs which have been duplicated by Jinja template
-                page.set_max_ids()
-                for shape_id in loop_shape_ids:
-                    shapes_by_id = page._find_shapes_by_id(shape_id)  # type: List[Shape]
-                    if shapes_by_id and len(shapes_by_id) > 1:
-                        delta = 0
-                        for shape in shapes_by_id[1:]:  # from the 2nd onwards - leaving original unchanged
-                            # increment each new shape duplicated by the jinja loop
-                            self.increment_sub_shape_ids(shape, page)
-                            delta += shape.height  # automatically move each duplicate down
-                            shape.move(0, -delta)  # move duplicated shapes so they are visible
-            else:
-                # note page to remove after this loop has completed
-                pages_to_remove.append(page)
-        # remove pages after processing
-        for p in pages_to_remove:
-            logger.debug("Removing page:'%s' index:%s", p.name, p.index_num)
-            self.remove_page_by_index(p.index_num)
-
-    @staticmethod
-    def jinja_render_shape(shape: Shape, context: dict, loop_shape_ids: list):
-        prev_shape = None
-        for s in shape.child_shapes:  # type: Shape
-            # manage for loops in template
-            loop_shape_id = VisioFile.jinja_create_for_loop_if(s, prev_shape)
-            if loop_shape_id:
-                loop_shape_ids.append(loop_shape_id)
-            prev_shape = s
-            # manage 'set self' statements
-            VisioFile.jinja_set_selfs(s, context)
-            VisioFile.jinja_render_shape(shape=s, context=context, loop_shape_ids=loop_shape_ids)
-
-    @staticmethod
-    def jinja_set_selfs(shape: Shape, context: dict):
-        # apply any {% self self.xxx = yyy %} statements in shape properties
-        jinja_source = shape.text
-        matches = re.findall(r"{% set self.(.*?)\s?=\s?(.*?) %}", jinja_source)  # non-greedy search for all {%...%} strings
-        for m in matches:  # type: tuple  # expect ('property', 'value') such as ('x', '10') or ('y', 'n*2')
-            property_name = m[0]
-            value = "{{ " + m[1] + " }}"  # Jinja to be processed
-            # todo: replace any self references in value with actual value - i.e. {% set self.x = self.x+1 %}
-            self_refs = re.findall(r"self.(.*)[\s+-/*//]?", m[1])  # greedy search for all self.? between +, -, *, or /
-            for self_ref in self_refs:  # type: tuple  # expect ('property', 'value') such as ('x', '10') or ('y', 'n*2')
-                ref_val = str(shape.__getattribute__(self_ref[0]))
-                value = value.replace("self." + self_ref[0], ref_val)
-            # use Jinja template to calculate any self refs found
-            template = Template(value)  # value might be '{{ 1.0+2.4*3 }}'
-            value = template.render(context)
-            if property_name in ["x", "y"]:
-                shape.__setattr__(property_name, value)
-
-        # remove any {% set self %} statements, leaving any remaining text
-        matches = re.findall("{% set self.*?%}", jinja_source)
-        for m in matches:
-            jinja_source = jinja_source.replace(m, "")  # remove Jinja 'set self' statement
-        shape.text = jinja_source
-
-    @staticmethod
-    def unescape_jinja_statements(jinja_source):
-        # unescape any text between {% ... %}
-        jinja_source_out = jinja_source
-        matches = re.findall("{%(.*?)%}", jinja_source)  # non-greedy search for all {%...%} strings
-        for m in matches:
-            unescaped = m.replace("&gt;", ">").replace("&lt;", "<")
-            jinja_source_out = jinja_source_out.replace(m, unescaped)
-        return jinja_source_out
-
-    @staticmethod
-    def jinja_create_for_loop_if(shape: Shape, previous_shape: Shape | None):
-        # update a Shapes tag where text looks like a jinja {% for xxxx %} loop
-        # move text to start of Shapes tag and add {% endfor %} at end of tag
-        text = shape.text
-
-        # use regex to find all loops
-        jinja_loops = re.findall(r"{% for\s(.*?)\s%}", text)
-
-        for loop in jinja_loops:
-            jinja_loop_text = f"{{% for {loop} %}}"
-            # move the for loop to start of shapes element (just before first Shape element)
-            if previous_shape:
-                if previous_shape.xml.tail:
-                    previous_shape.xml.tail += jinja_loop_text
-                else:
-                    previous_shape.xml.tail = jinja_loop_text  # add jinja loop text after previous shape, before this element
-            else:
-                if shape.parent.xml.text:
-                    shape.parent.xml.text += jinja_loop_text
-                else:
-                    shape.parent.xml.text = jinja_loop_text  # add jinja loop at start of parent, just before this element
-            shape.text = shape.text.replace(jinja_loop_text, "")  # remove jinja loop from <Text> tag in element
-
-            # add closing 'endfor' to just inside the shapes element, after last shape
-            if shape.xml.tail:  # extend or set text at end of Shape element
-                shape.xml.tail += "{% endfor %}"
-            else:
-                shape.xml.tail = "{% endfor %}"
-
-        jinja_show_ifs = re.findall(r"{% showif\s(.*?)\s%}", text)  # find all showif statements
-        # jinja_show_if - translate non-standard {% showif statement %} to valid jinja if statement
-        for show_if in jinja_show_ifs:
-            jinja_show_if = f"{{% if {show_if} %}}"  # translate to actual jinja if statement
-            # move the for loop to start of shapes element (just before first Shape element)
-            if previous_shape:
-                previous_shape.xml.tail = (
-                    str(previous_shape.xml.tail or "") + jinja_show_if
-                )  # add jinja loop text after previous shape, before this element
-            else:
-                shape.parent.xml.text = (
-                    str(shape.parent.xml.text or "") + jinja_show_if
-                )  # add jinja loop at start of parent, just before this element
-
-            # remove original jinja showif from <Text> tag in element
-            shape.text = shape.text.replace(f"{{% showif {show_if} %}}", "")
-
-            # add closing 'endfor' to just inside the shapes element, after last shape
-            if shape.xml.tail:  # extend or set text at end of Shape element
-                shape.xml.tail += "{% endif %}"
-            else:
-                shape.xml.tail = "{% endif %}"
-
-        if jinja_loops:
-            return shape.ID  # return shape ID if it is a loop, so that duplicate shape IDs can be updated
-
-    @staticmethod
-    def jinja_page_showif(page: Page, context: dict):
-        text = page.name
-        jinja_source = re.findall(r"{% showif\s(.*?)\s%}", text)
-        if len(jinja_source):
-            # process last matching value
-            template_source = "{{ " + jinja_source[-1] + " }}"
-            template = Template(template_source)  # value might be '{{ 1.0+2.4*3 }}'
-            value = template.render(context)
-            # is the value truthy - i.e. not 0, False, or empty string, tuple, list or dict
-            logger.debug(
-                "jinja_page_showif(context=%s) statement: %s returns: %s %s", context, template_source, type(value), value
-            )
-            if value in ["False", "0", "", "()", "[]", "{}"]:
-                logger.debug("value in ['False', '0', '', '()', '[]', '{}']")
-                return False  # page should be hidden
-            # remove jinja statement from page name
-            jinja_statement = re.match("{%.*?%}", page.name)[0]
-            page.name = page.name.replace(jinja_statement, "")
-        return True  # page should be left in
 
     @staticmethod
     def get_shape_id(shape: ET) -> str:
