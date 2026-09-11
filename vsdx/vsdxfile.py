@@ -1,16 +1,12 @@
 from __future__ import annotations
 
-import copy as copy_module
 import io
 import os
-import re
 import shutil
 import xml.dom.minidom as minidom  # minidom used for prettyprint
 import xml.etree.ElementTree as ET
 import zipfile
 from xml.etree.ElementTree import Element
-
-from jinja2 import Template
 
 from .logging_support import attach_debug_stream_handler, get_logger
 from .masters import MastersImportMixin

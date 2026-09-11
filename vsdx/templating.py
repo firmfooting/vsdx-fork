@@ -10,10 +10,9 @@ import xml.etree.ElementTree as ET
 
 from jinja2 import Template
 
-from .pages import Page
-from .xmlio import file_to_xml, xml_to_file
-from .shapes import Shape
 from .logging_support import get_logger
+from .pages import Page
+from .shapes import Shape
 
 logger = get_logger(__name__)
 

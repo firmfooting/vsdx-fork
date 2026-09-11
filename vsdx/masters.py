@@ -8,16 +8,15 @@ from __future__ import annotations
 
 import copy as copy_module
 import io
-
 import xml.etree.ElementTree as ET
-from xml.etree.ElementTree import Element, ElementTree
+from xml.etree.ElementTree import Element
 
-from vsdx import document_rels_namespace, namespace, r_namespace  # noqa: E402
+from vsdx import document_rels_namespace, namespace, r_namespace
 
-from .pages import Page
-from .xmlio import file_to_xml, xml_to_file
-from .shapes import Shape
 from .logging_support import get_logger
+from .pages import Page
+from .shapes import Shape
+from .xmlio import file_to_xml, xml_to_file
 
 logger = get_logger(__name__)
 
