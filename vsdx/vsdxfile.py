@@ -409,7 +409,7 @@ class VisioFile:
         self.zip_file_contents[f'{self._masters_folder}/_rels/masters.xml.rels'] = io.BytesIO(
             b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n'
             b'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>')
-        self._add_content_types_override(part_name_path=f'/{self._masters_folder}/masters.xml',
+        self._add_content_types_override(part_name_path='/visio/masters/masters.xml',
                                          content_type='application/vnd.ms-visio.masters+xml')
         self._add_document_rel(rel_type='http://schemas.microsoft.com/visio/2010/relationships/masters',
                                target='masters/masters.xml')
