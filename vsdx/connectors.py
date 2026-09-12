@@ -33,15 +33,15 @@ class Connect:
             raise ValueError("Connect requires the connection's XML element")
         if type(xml) is not Element or xml.tag != f"{namespace}Connect":
             raise ValueError(f"Connect requires a {namespace}Connect element, got {xml.tag!r}")
-        missing = [name for name in ("FromSheet", "ToSheet", "FromCell", "ToCell") if name not in xml.attrib]
+        missing = [name for name in ("FromSheet", "ToSheet") if name not in xml.attrib]
         if missing:
             raise ValueError(f"Connect element is missing required attribute(s): {', '.join(missing)}")
         self.xml = xml
         self.page = page
         self.from_id = xml.attrib["FromSheet"]  # ref to the connector shape
         self.to_id = xml.attrib["ToSheet"]  # ref to the shape where the connector terminates
-        self.from_rel = xml.attrib["FromCell"]  # i.e. EndX / BeginX
-        self.to_rel = xml.attrib["ToCell"]  # i.e. PinX
+        self.from_rel = xml.attrib.get("FromCell")  # i.e. EndX / BeginX; optional per Connect_Type
+        self.to_rel = xml.attrib.get("ToCell")  # i.e. PinX; optional per Connect_Type
 
     @staticmethod
     def create(

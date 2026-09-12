@@ -48,13 +48,24 @@ def test_constructor_rejects_wrong_tag(page_with_connector):
         Connect(xml=bogus, page=page_with_connector)
 
 
-@pytest.mark.parametrize("missing", ["FromSheet", "ToSheet", "FromCell", "ToCell"])
+@pytest.mark.parametrize("missing", ["FromSheet", "ToSheet"])
 def test_constructor_rejects_missing_required_attribute(page_with_connector, missing):
     attribs = {"FromSheet": "5", "ToSheet": "2", "FromCell": "BeginX", "ToCell": "PinX"}
     del attribs[missing]
     bogus = ET.Element(f"{namespace}Connect", attribs)
     with pytest.raises(ValueError, match=missing):
         Connect(xml=bogus, page=page_with_connector)
+
+
+@pytest.mark.parametrize("optional", ["FromCell", "ToCell"])
+def test_optional_cell_attributes_read_as_none(page_with_connector, optional):
+    """Connect_Type declares the cell attributes optional; absence is None, not an error."""
+    attribs = {"FromSheet": "5", "ToSheet": "2", "FromCell": "BeginX", "ToCell": "PinX"}
+    del attribs[optional]
+    element = ET.Element(f"{namespace}Connect", attribs)
+    connect = Connect(xml=element, page=page_with_connector)
+    assert getattr(connect, "from_rel" if optional == "FromCell" else "to_rel") is None
+    assert repr(connect)
 
 
 def test_constructor_rejects_missing_page():
