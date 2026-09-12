@@ -583,7 +583,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
                     # insert new page after the original page
                     index = orig_page_idx + 1
             else:
-                index = len(self.pages)  # default to LAST if invalid Position/page combination
+                raise ValueError(f"{index!r} requires a reference page; pass the source page to position relative to")
 
         return index
 
@@ -826,6 +826,10 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
 
         # Determine the new page's name
         new_page_name = self._get_new_page_name(name or f"Page-{len(self.pages) + 1}")
+
+        # Resolve the position before any package mutation so a rejected call
+        # (BEFORE/AFTER without a reference page) leaves the document unchanged
+        index = self._get_index(index=index, page=None)
 
         # Determine the new page's filename
         new_page_filename = f"page{len(self.pages) + 1}.xml"
