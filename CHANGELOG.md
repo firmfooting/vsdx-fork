@@ -78,6 +78,11 @@ available at <https://github.com/dave-howard/vsdx>.
 
 ### Changed
 
+- The documentation toolchain moved from the published `docs` extra to a PEP 735
+  `docs` dependency group carrying its own `requires-python` floor, so Sphinx can
+  track releases that need a newer interpreter than `vsdxkit` itself. Sphinx is
+  now pinned to 9.1.0 and the docs build runs on Python 3.12. Anyone installing
+  `vsdxkit[docs]` should install the `docs` group instead.
 - The lint job checks and formats the whole `tests` tree rather than two
   selected test modules; the remaining test files have been brought into
   compliance (semantic fixes: `raise AssertionError` instead of `assert

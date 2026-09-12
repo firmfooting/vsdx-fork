@@ -9,7 +9,7 @@ installs as `vsdxkit` and imports as `vsdx`. Python 3.10 or later is required.
 The repository uses [uv](https://docs.astral.sh/uv/) with a committed lockfile:
 
 ```
-uv sync --extra docs    # test, lint and build groups plus Sphinx
+uv sync --group docs    # test, lint and build groups plus Sphinx (needs Python 3.12+)
 uv run pytest tests -q
 uv run ruff check vsdx tests
 uv run ruff format --check vsdx tests
