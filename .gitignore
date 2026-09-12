@@ -9,3 +9,4 @@
 /tests/out/
 __pycache__/
 settings.json
+/.claude/worktrees/
