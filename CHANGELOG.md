@@ -20,6 +20,13 @@ available at <https://github.com/dave-howard/vsdx>.
 - The CI build job now smoke-tests the built wheel in a clean virtual
   environment (install, import, `pip show`, `py.typed` presence) before the
   distribution is uploaded as an artifact.
+- The `Connect` constructor validates its inputs and always produces a complete
+  instance: the page and XML element are required, the element must be a
+  namespaced `Connect` tag, and the schema-required `FromSheet`/`ToSheet`
+  attributes must be present. `FromCell`/`ToCell` remain optional per the
+  `Connect_Type` schema and read as `None` when absent. Invalid input raises
+  `ValueError` instead of yielding an object that fails later on missing
+  attributes.
 - CI cancels superseded runs on the same ref via a concurrency group.
 - Page `width`/`height` setters reject `None`, non-numeric and non-finite values
   and non-positive dimensions instead of silently writing `0.0`; the cell is
