@@ -8,6 +8,10 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: test py${{ matrix.python-version }} (${{ matrix.os }})
@@ -80,9 +84,9 @@ jobs:
       - name: Install lint and documentation tools
         run: uv sync --locked --no-default-groups --group lint --extra docs
       - name: ruff check
-        run: uv run --no-sync ruff check vsdx tests/test_imports.py tests/test_shape_coordinates.py
+        run: uv run --no-sync ruff check vsdx tests
       - name: ruff format
-        run: uv run --no-sync ruff format --check vsdx tests/test_imports.py tests/test_shape_coordinates.py
+        run: uv run --no-sync ruff format --check vsdx tests
       - name: pyrefly strict
         run: uv run --no-sync pyrefly check vsdx --min-severity warn --output-format min-text
       - name: Sphinx documentation
@@ -107,6 +111,13 @@ jobs:
         run: |
           uv sync --locked --no-default-groups --group build
           uv run --no-sync python -m build
+      - name: Smoke test distribution
+        run: |
+          uv venv dist-check
+          uv pip install --python dist-check/bin/python dist/*.whl
+          dist-check/bin/python -c "import vsdx; print(f'vsdxkit {vsdx.__version__} imports cleanly')"
+          uv pip show --python dist-check/bin/python vsdxkit >/dev/null
+          dist-check/bin/python -c "import os, vsdx; assert os.path.exists(os.path.join(os.path.dirname(vsdx.__file__), 'py.typed')), 'py.typed missing from wheel'"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v4
         with:
           name: dist
