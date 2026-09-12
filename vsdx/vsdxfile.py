@@ -827,6 +827,10 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         # Determine the new page's name
         new_page_name = self._get_new_page_name(name or f"Page-{len(self.pages) + 1}")
 
+        # Resolve the position before any package mutation so a rejected call
+        # (BEFORE/AFTER without a reference page) leaves the document unchanged
+        index = self._get_index(index=index, page=None)
+
         # Determine the new page's filename
         new_page_filename = f"page{len(self.pages) + 1}.xml"
 
