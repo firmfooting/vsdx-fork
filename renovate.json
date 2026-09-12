@@ -1,0 +1,24 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["github>firmfooting/renovate-config"],
+  "forkProcessing": "enabled",
+  "timezone": "Australia/Melbourne",
+  "schedule": ["before 6am on monday"],
+  "prHourlyLimit": 0,
+  "osvVulnerabilityAlerts": true,
+  "lockFileMaintenance": {
+    "enabled": true
+  },
+  "packageRules": [
+    {
+      "description": "GitHub Actions digest bumps: one grouped weekly PR. The Actions stay digest-pinned; Renovate raises the pins.",
+      "matchFileNames": [".github/workflows/**"],
+      "groupName": "github-actions"
+    },
+    {
+      "description": "Python dependencies and uv lock maintenance: one grouped weekly PR. uv owns resolution, so updates land as uv.lock changes.",
+      "matchFileNames": ["pyproject.toml", "uv.lock"],
+      "groupName": "python-deps"
+    }
+  ]
+}
