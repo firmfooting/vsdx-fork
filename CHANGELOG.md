@@ -21,6 +21,9 @@ available at <https://github.com/dave-howard/vsdx>.
   environment (install, import, `pip show`, `py.typed` presence) before the
   distribution is uploaded as an artifact.
 - CI cancels superseded runs on the same ref via a concurrency group.
+- Page `width`/`height` setters reject `None`, non-numeric and non-finite values
+  and non-positive dimensions instead of silently writing `0.0`; the cell is
+  left untouched on failure.
 - Pyrefly runs at the `strict` preset with zero diagnostics at warning severity
   and no in-source type suppression comments.
 - Typed contracts for shapes, pages, connectors, geometry, containers,
