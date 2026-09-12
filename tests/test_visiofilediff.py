@@ -10,9 +10,7 @@ from vsdx.vsdxdiff import VisioFileDiff
 basedir = os.path.dirname(os.path.relpath(__file__))
 
 
-@pytest.mark.parametrize(("filename_a", "filename_b"),
-                         [("test1.vsdx", "test2.vsdx" ),
-                          ("test1.vsdx", "test4_connectors.vsdx" )])
+@pytest.mark.parametrize(("filename_a", "filename_b"), [("test1.vsdx", "test2.vsdx"), ("test1.vsdx", "test4_connectors.vsdx")])
 def test_create_visiodiff(filename_a: str, filename_b: str):
     filepath_a = os.path.join(basedir, filename_a)
     filepath_b = os.path.join(basedir, filename_b)
@@ -29,13 +27,16 @@ def test_create_visiodiff(filename_a: str, filename_b: str):
 
 # next test, open file, set text of shape, save as - then compare the two
 @pytest.mark.skip
-@pytest.mark.parametrize(("filename_a", "filename_b"),
-                         [("test1.vsdx", "test1_outfile.vsdx" ),
-                          ("test2.vsdx", "test2_outfile.vsdx" ),
-                          ])
+@pytest.mark.parametrize(
+    ("filename_a", "filename_b"),
+    [
+        ("test1.vsdx", "test1_outfile.vsdx"),
+        ("test2.vsdx", "test2_outfile.vsdx"),
+    ],
+)
 def test_visiodiff_before_after(filename_a: str, filename_b: str):
     filepath_a = os.path.join(basedir, filename_a)
-    filepath_b = os.path.join(basedir, 'out', filename_b)
+    filepath_b = os.path.join(basedir, "out", filename_b)
     with VisioFile(filepath_a) as vis:
         print(f"saving as {filepath_b}")
         vis.save_vsdx(filepath_b)
@@ -49,17 +50,17 @@ def test_visiodiff_before_after(filename_a: str, filename_b: str):
         diff = fd.diffs.get(m)
         print(f"\n\n{m} {type(diff)} len:{len(diff) if diff else 0}")
         if diff:
-            num = 0
-            for l in diff:
-                num += 1
-                print(f"{num} {l}")
+            for num, line in enumerate(diff, start=1):
+                print(f"{num} {line}")
 
 
 @pytest.mark.skip
-@pytest.mark.parametrize(("filename_a", "filename_b"),
-                         [
-                             ("test4_connectors_out.vsdx", "test4_connectors_added.vsdx" ),
-                          ])
+@pytest.mark.parametrize(
+    ("filename_a", "filename_b"),
+    [
+        ("test4_connectors_out.vsdx", "test4_connectors_added.vsdx"),
+    ],
+)
 def test_visiodiff_two_files(filename_a: str, filename_b: str):
     filepath_a = os.path.join(basedir, filename_a)
     filepath_b = os.path.join(basedir, filename_b)
@@ -73,7 +74,5 @@ def test_visiodiff_two_files(filename_a: str, filename_b: str):
         diff = fd.diffs.get(m)
         print(f"\n\n{m} {type(diff)} len:{len(diff) if diff else 0}")
         if diff:
-            num = 0
-            for l in diff:
-                num += 1
-                print(f"{num} {l}")
+            for num, line in enumerate(diff, start=1):
+                print(f"{num} {line}")
