@@ -4,7 +4,6 @@ import os
 
 import pytest
 
-import vsdx
 from vsdx import (
     DataProperty,
     VisioFile,
@@ -643,17 +642,14 @@ def test_shape_end_arrow(filename, page_index, shape_text, arrow):
         page = vis.pages[page_index]
         shape = page.find_shape_by_text(shape_text)
         shape.end_arrow = arrow
-        print(shape.end_arrow)
-        print(vsdx.pretty_print_element(shape.xml))
-        assert shape.end_arrow == "13" if arrow else "0"
+        expected_arrow = "13" if arrow else "0"
+        assert shape.end_arrow == expected_arrow
         vis.save_vsdx(out_file)
 
     with VisioFile(out_file) as vis:
         page = vis.pages[page_index]
         shape = page.find_shape_by_text(shape_text)
-        print(shape.end_arrow)
-        print(vsdx.pretty_print_element(shape.xml))
-        assert shape.end_arrow == "13" if arrow else "0"
+        assert shape.end_arrow == expected_arrow
 
 
 @pytest.mark.parametrize(

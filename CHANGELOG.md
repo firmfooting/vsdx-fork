@@ -17,6 +17,16 @@ available at <https://github.com/dave-howard/vsdx>.
 - `VisioFileNotOpen` is now a genuine `Exception` subclass and is exported from
   the package root, so save-after-close is caught by normal `except Exception`
   handling and can be caught specifically.
+- The CI build job now smoke-tests the built wheel in a clean virtual
+  environment (install, import, `pip show`, `py.typed` presence) before the
+  distribution is uploaded as an artifact.
+- The `Connect` constructor validates its inputs and always produces a complete
+  instance: the page and XML element are required, the element must be a
+  namespaced `Connect` tag, and the schema-required `FromSheet`/`ToSheet`
+  attributes must be present. `FromCell`/`ToCell` remain optional per the
+  `Connect_Type` schema and read as `None` when absent. Invalid input raises
+  `ValueError` instead of yielding an object that fails later on missing
+  attributes.
 - CI cancels superseded runs on the same ref via a concurrency group.
 - Page `width`/`height` setters reject `None`, non-numeric and non-finite values
   and non-positive dimensions instead of silently writing `0.0`; the cell is
@@ -36,14 +46,17 @@ available at <https://github.com/dave-howard/vsdx>.
   re-anchoring, swimlanes, search and Jinja templates.
 - Sphinx warning-as-error validation and a dedicated zizmor GitHub Actions audit
   in the CI gates.
-- Digest-pinned GitHub Actions carry accurate `# vX.Y.Z` annotations, and a CI
-  check resolves every pin against its action repository's tags and fails on
-  annotation drift.
 - Malformed numeric ShapeSheet values raise `ValueError` naming the cell and raw
   value instead of silently reading as `0.0`; absent cells still read as `None`,
   keeping absent, malformed and genuine zero distinct.
 - Package-wide import coverage now runs as a normal test across the supported
   Python and operating-system matrix.
+- Test-suite strengthening: previously output-only tests now assert against
+  independent expectations and reopen persisted files; a conditional-assert
+  precedence bug in the end-arrow tests, an always-true assertion and an
+  ignored expectations parameter are fixed; the two skipped diff tests are
+  replaced with deterministic equivalents; and a four-mutant kill run
+  documents that the new tests fail when the behaviour they name is broken.
 
 ### Fixed
 
@@ -78,6 +91,11 @@ available at <https://github.com/dave-howard/vsdx>.
 
 ### Changed
 
+- The documentation toolchain moved from the published `docs` extra to a PEP 735
+  `docs` dependency group carrying its own `requires-python` floor, so Sphinx can
+  track releases that need a newer interpreter than `vsdxkit` itself. Sphinx is
+  now pinned to 9.1.0 and the docs build runs on Python 3.12. Anyone installing
+  `vsdxkit[docs]` should install the `docs` group instead.
 - The lint job checks and formats the whole `tests` tree rather than two
   selected test modules; the remaining test files have been brought into
   compliance (semantic fixes: `raise AssertionError` instead of `assert

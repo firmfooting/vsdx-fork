@@ -37,10 +37,12 @@ For development:
 ```bash
 git clone https://github.com/shauneccles/vsdx.git
 cd vsdx
-uv sync --locked --extra docs
+uv sync --locked
 ```
 
-Python 3.10–3.14 is supported on Linux and Windows.
+Python 3.10–3.14 is supported on Linux and Windows. Add `--group docs` to that
+sync if you also want to build the documentation; Sphinx needs Python 3.12 or
+later.
 
 ## Open, edit and save
 
@@ -189,9 +191,13 @@ The package is held at pyrefly's `strict` preset. CI tests Python 3.10–3.14 on
 The Sphinx source is in [`docs/`](docs/). Build it locally with:
 
 ```bash
-uv sync --locked --extra docs
+uv sync --locked --group docs
 uv run --no-sync python -m sphinx -W --keep-going -b html docs docs/_build/html
 ```
+
+Sphinx is pinned in the `docs` dependency group, which requires Python 3.12 or
+later. The library itself still supports 3.10, so run the docs build on a 3.12+
+interpreter.
 
 ## Provenance and licence
 

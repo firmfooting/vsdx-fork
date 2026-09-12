@@ -95,31 +95,52 @@ def test_set_page_size(filename: str, page_index: int, page_scale: float):
 
 
 @pytest.mark.parametrize(
-    "filename, page_index, expected_shape_bounds",
+    "filename, page_index, expected_bounds",
     [
-        ("test1.vsdx", 0, (0, 0, 1, 1)),
-        ("test2.vsdx", 0, (0, 0, 1, 1)),
-        ("test1.vsdx", 2, (0, 0, 1, 1)),
-        ("test2.vsdx", 2, (0, 0, 1, 1)),
+        (
+            "test1.vsdx",
+            0,
+            {
+                "Shape Text": (0.25, 9.868, 2.415, 11.443),
+                "Shape to remove": (3.051, 9.868, 5.217, 11.443),
+                "Shape to copy": (5.852, 9.868, 8.018, 11.443),
+            },
+        ),
+        (
+            "test2.vsdx",
+            0,
+            {
+                "Shape Text": (0.0, 0.0, 2.165, 1.575),
+                "Group shape text": (0.25, 9.868, 2.415, 11.443),
+            },
+        ),
+        ("test1.vsdx", 2, {"Shape was here already": (0.645, 9.011, 2.811, 10.586)}),
+        ("test2.vsdx", 2, {"Shape already here": (0.25, 9.868, 2.415, 11.443)}),
     ],
 )
-def test_get_page_bounds(filename: str, page_index: int, expected_shape_bounds: tuple):
+def test_get_page_bounds(filename: str, page_index: int, expected_bounds: dict):
+    """Shape bounds must match fixture-derived absolute expectations.
+
+    Expected values are the coordinates observed in the fixture documents;
+    they pin the bounds calculation against silent zeroing or offset shifts.
+    """
     out_file = os.path.join(basedir, "out", f"{filename[:-5]}_test_get_page_bounds_{page_index}.vsdx")
     with VisioFile(os.path.join(basedir, filename)) as vis:
         page = vis.pages[page_index]
+        assert page.all_shapes  # a bounds test needs shapes to bound
+
+        shape_by_text = {s.text: s for s in page.all_shapes if s.text}
+        assert shape_by_text, "fixture shapes carry no text to key expectations"
+        for text, expected in expected_bounds.items():
+            shape = shape_by_text.get(text)
+            assert shape is not None, f"fixture shape {text!r} not found on page {page_index}"
+            actual = tuple(round(value, 3) for value in shape.bounds)
+            assert actual == expected, f"{text!r}: {actual} != {expected}"
 
         box = vsdx.media.Media().rectangle
-
         for s in page.all_shapes:
-            # bx = s.begin_x or (s.x-s.loc_x)
-            # by = s.begin_y or (s.y-s.loc_y)
-            # ex = s.end_x or (bx + s.width)
-            # ey = s.end_y or (by + s.height)
             bx, by, ex, ey = s.bounds
-            # print(f"{s.ID} bx:{bx} by:{by} ex:{ex} ey:{ey} x:{s.x} y:{s.y} lx:{s.loc_x} ly:{s.loc_y} w:{s.width} h:{s.height} {s.text} {s.geometry.rows if s.geometry else None}")
             cbox = box.copy(page=page)
-            # print(vsdx.pretty_print_element(list(cbox.cells.values())[0].xml))
-            print(s.text, s.bounds, s.parent.shape_type)
             cbox.line_color = "#ff2222"
             cbox.x = bx
             cbox.loc_x = 0
@@ -128,7 +149,6 @@ def test_get_page_bounds(filename: str, page_index: int, expected_shape_bounds: 
             cbox.loc_y = 0
             cbox.height = ey - by
             cbox.text = f"{bx:.2g},{by:.2g}-{ex:.2g},{ey:.2g}"
-            # print(vsdx.pretty_print_element(cbox.xml))
         vis.save_vsdx(out_file)
 
 
@@ -449,33 +469,43 @@ def test_add_connect_between_shapes(filename: str, page_index: int, shape_a_text
             assert page.find_shape_by_id(new_connector_id)
 
 
-@pytest.mark.parametrize(
-    ("filename"),
-    [
-        ("test8_simple_connector.vsdx"),
-    ],
-)
+@pytest.mark.parametrize("filename", ["test8_simple_connector.vsdx", "test4_connectors.vsdx"])
 def test_add_multiple_connectors(filename: str):
+    out_file = os.path.join(basedir, "out", f"{filename[:-5]}_new_test_1.vsdx")
     with VisioFile(os.path.join(basedir, filename)) as vis:
         src_page = vis.pages[0]
         block_shape = src_page.child_shapes[0]
         new_page = vis.add_page("new page")
-        # 1
-        # adding new_shape1, new_shape2 and connecting them
         new_shape1 = block_shape.copy(new_page)
         new_shape1.text = "new shape 1"
         new_shape2 = block_shape.copy(new_page)
         new_shape2.text = "new shape 2"
         Connect.create(page=new_page, from_shape=new_shape1, to_shape=new_shape2)
-        out_file = os.path.join(basedir, "out", f"{filename[:-5]}_new_test_1.vsdx")
-        vis.save_vsdx(out_file)
-        # 2
-        # adding new_shape3 and connecting it to new_shape2
         new_shape3 = block_shape.copy(new_page)
         new_shape3.text = "new shape 3"
-        Connect.create(page=new_page, from_shape=new_shape2, to_shape=new_shape3)  # ERROR
-        out_file = os.path.join(basedir, "out", f"{filename[:-5]}_new_test_2.vsdx")
+        Connect.create(page=new_page, from_shape=new_shape2, to_shape=new_shape3)
         vis.save_vsdx(out_file)
+
+    # the contract is persistence: connector shapes and their Connect records
+    # must survive save/reopen, for both created connectors
+    with VisioFile(out_file) as vis:
+        new_page = vis.pages[-1]
+        shape1 = new_page.find_shape_by_text("new shape 1")
+        shape2 = new_page.find_shape_by_text("new shape 2")
+        shape3 = new_page.find_shape_by_text("new shape 3")
+        assert shape1 is not None and shape2 is not None and shape3 is not None
+        connectors = [s for s in new_page.all_shapes if "BeginX" in s.cells]
+        assert len(connectors) >= 2
+        # each Connect.create() yields one connector shape with one Connect
+        # record per endpoint, so group endpoints by connector and require
+        # both created pairs to appear in full
+        endpoints_by_connector: dict[str, set[str]] = {}
+        for connect in new_page.connects:
+            if connect.from_id is not None:
+                endpoints_by_connector.setdefault(connect.from_id, set()).add(str(connect.to_id))
+        endpoint_sets = [set(ids) for ids in endpoints_by_connector.values()]
+        assert {str(shape1.ID), str(shape2.ID)} in endpoint_sets, endpoints_by_connector
+        assert {str(shape2.ID), str(shape3.ID)} in endpoint_sets, endpoints_by_connector
 
 
 @pytest.mark.parametrize(
