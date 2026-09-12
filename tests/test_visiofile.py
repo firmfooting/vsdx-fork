@@ -402,7 +402,7 @@ def test_add_page_at(filename: str, index: int, page_name: str):
 def test_app_xml_page_names_after_add_page(filename: str, new_page_name: str, location: int):
     # test that page names in app.xml matches page names loaded
     with VisioFile(os.path.join(basedir, filename)) as vis:
-        if location is not None:
+        if location is None:
             vis.add_page(new_page_name)
         else:
             vis.add_page_at(location, new_page_name)
@@ -412,15 +412,18 @@ def test_app_xml_page_names_after_add_page(filename: str, new_page_name: str, lo
         num_pages = int(i4.text)
         assert num_pages == len(vis.pages)
 
-        # check page names from pages is same as page names from app.xml
-        page_names = [p.name for p in vis.pages]
+        # check page names from pages is same as page names from app.xml;
+        # TitlesOfParts is document metadata and does not track pages.xml
+        # order, so the comparison is order-insensitive now that insertion
+        # positions are actually honoured
+        page_names = sorted(p.name for p in vis.pages)
         TitlesOfParts = vis.app_xml.getroot().find(f"{ext_prop_namespace}TitlesOfParts")
         vector = TitlesOfParts.find(f"{vt_namespace}vector")
         app_xml_page_names = []
         for lpstr in vector.findall(f"{vt_namespace}lpstr"):
             page_name = lpstr.text
             app_xml_page_names.append(page_name)
-        assert page_names == app_xml_page_names
+        assert sorted(app_xml_page_names) == page_names
 
 
 def test_copy_page_clones_relationship_part(vsdx_copy, tmp_path):

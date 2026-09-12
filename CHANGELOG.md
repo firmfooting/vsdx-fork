@@ -25,6 +25,10 @@ available at <https://github.com/dave-howard/vsdx>.
 - Shared required-XML helpers that report the missing package part rather than
   failing later on a `None` value.
 - Regression coverage for in-place and named save destinations.
+- `PagePosition.BEFORE` and `PagePosition.AFTER` now require a reference page:
+  `add_page_at()` rejects them with `ValueError` instead of silently appending,
+  and the resolver no longer falls back to `LAST` for invalid combinations.
+  Integer, `FIRST` and `LAST` placements are asserted by index in tests.
 - Current README and Sphinx guides for shape creation, connectors,
   re-anchoring, swimlanes, search and Jinja templates.
 - Sphinx warning-as-error validation and a dedicated zizmor GitHub Actions audit

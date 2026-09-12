@@ -583,7 +583,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
                     # insert new page after the original page
                     index = orig_page_idx + 1
             else:
-                index = len(self.pages)  # default to LAST if invalid Position/page combination
+                raise ValueError(f"{index!r} requires a reference page; pass the source page to position relative to")
 
         return index
 
