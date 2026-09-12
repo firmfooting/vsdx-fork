@@ -514,6 +514,24 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
                 # remove internal references to page
                 self._remove_page_from_app_xml(page.name)
 
+                # remove the page's relationship from pages.xml.rels (issue #7:
+                # a dangling rId pointing at a deleted part corrupts the OPC graph)
+                rels_root = self._part_root(self.pages_xml_rels, "pages.xml.rels")
+                page_rel = rels_root.find(f'{document_rels_namespace}Relationship[@Id="{page.rel_id}"]')
+                if page_rel is not None:
+                    rels_root.remove(page_rel)
+
+                # remove the page's content-type override
+                content_types = self._part_root(self.content_types_xml, "[Content_Types].xml")
+                part_name = f"/visio/pages/{os.path.basename(page.filename)}"
+                override = content_types.find(f'{cont_types_namespace}Override[@PartName="{part_name}"]')
+                if override is not None:
+                    content_types.remove(override)
+
+                # remove the page's own rels part if one exists
+                if page.rels_xml_filename and page.rels_xml_filename in self.zip_file_contents:
+                    self.zip_file_contents.pop(page.rels_xml_filename)
+
                 # remove page<index>.xml file
                 self.zip_file_contents.pop(self.pages[index].filename)
                 del self.pages[index]
@@ -540,9 +558,12 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         """Updates the pages.xml.rels file with a reference to the new page and returns the new relid"""
 
         rels_root = self._part_root(self.pages_xml_rels, "pages.xml.rels")
-        max_relid = max(rels_root, key=lambda rel: int(rel.attrib["Id"][3:]), default=None)  # 'rIdXX' -> XX
-        max_relid = int(max_relid.attrib["Id"][3:]) if max_relid is not None else 0
-        new_page_relid = f"rId{max_relid + 1}"  # Most likely will be equal to len(self.pages)+1
+        # allocate an unused rel-id rather than assuming count+1 (issue #7)
+        used_rel_ids = {rel.attrib["Id"] for rel in rels_root}
+        counter = 1
+        while f"rId{counter}" in used_rel_ids:
+            counter += 1
+        new_page_relid = f"rId{counter}"
 
         new_page_rel = {
             "Target": new_page_filename,
@@ -560,6 +581,23 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
             i += 1
 
         return new_page_name
+
+    def _unused_page_part_name(self) -> str:
+        """Return an unused ``pageN.xml`` part name (issue #7).
+
+        Deriving the name from page count collides after a removal: two pages
+        could target the same part. Members currently in the package and
+        relationships still declared in pages.xml.rels are both treated as
+        taken, so the chosen name is unused by either.
+        """
+        page_dir = f"{self.directory}/visio/pages/"
+        taken = set(self.zip_file_contents)
+        rels_root = self._part_root(self.pages_xml_rels, "pages.xml.rels")
+        taken.update(f"{page_dir}{rel.attrib['Target']}" for rel in rels_root)
+        counter = 1
+        while f"{page_dir}page{counter}.xml" in taken:
+            counter += 1
+        return f"page{counter}.xml"
 
     def _get_max_page_id(self) -> int:
         pages_root = self._part_root(self.pages_xml, "pages.xml")
@@ -772,9 +810,12 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         new_page_element: Element,
         index: int | PagePosition,
         source_page: Page | None = None,
+        new_page_filename: str,
+        new_page_relid: str,
     ) -> Page:
         # Create visio\pages\pageX.xml file
-        # Add to visio\pages\_rels\pages.xml.rels
+        # Add to visio\pages\_rels\pages.xml.rels (done by the caller, which
+        # also allocates the part name and relationship id)
         # Add to visio\pages\pages.xml
         # Add to [Content_Types].xml
         # Add to docProps\app.xml
@@ -783,11 +824,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
 
         # create pageX.xml
         new_page_xml: ET.ElementTree[ET.Element] = ET.ElementTree(ET.fromstring(new_page_xml_str))
-        new_page_filename = f"page{len(self.pages) + 1}.xml"
         new_page_path = page_dir + new_page_filename  # TODO: better concatenation
-
-        # update pages.xml.rels - add rel for the new page
-        # done by the caller
 
         # update pages.xml - insert the PageElement Element in it's correct location
         index = self._get_index(index=index, page=source_page)
@@ -800,8 +837,10 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         if self.app_xml:
             self._add_page_to_app_xml(page_name)
 
-        # Update VisioFile object
-        new_page = Page(new_page_xml, new_page_path, page_name, "", "", self)
+        # Update VisioFile object; the page carries its real ID and relationship
+        # id immediately (issue #7: they were blank until a reload)
+        page_id = new_page_element.attrib["ID"]
+        new_page = Page(new_page_xml, new_page_path, page_name, page_id, new_page_relid, self)
         if source_page is not None and source_page.rels_xml is not None:
             source_rels_root = require_element(source_page.rels_xml.getroot(), "source page relationships root")
             new_page.rels_xml = ET.ElementTree(copy.deepcopy(source_rels_root))
@@ -832,7 +871,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         index = self._get_index(index=index, page=None)
 
         # Determine the new page's filename
-        new_page_filename = f"page{len(self.pages) + 1}.xml"
+        new_page_filename = self._unused_page_part_name()
 
         # Add reference to the new page in pages.xml.rels and get new relid
         new_page_relid = self._update_pages_xml_rels(new_page_filename)
@@ -877,6 +916,8 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
             page_name=new_page_name,
             new_page_element=new_page_element,
             index=index,
+            new_page_filename=new_page_filename,
+            new_page_relid=new_page_relid,
         )
 
         return new_page
@@ -908,7 +949,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         new_page_name = self._get_new_page_name(name or page.name)
 
         # Determine the new page's filename
-        new_page_filename = f"page{len(self.pages) + 1}.xml"
+        new_page_filename = self._unused_page_part_name()
 
         # Add reference to the new page in pages.xml.rels and get new relid
         new_page_relid = self._update_pages_xml_rels(new_page_filename)
@@ -934,6 +975,8 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
             new_page_element=new_page_element,
             index=index,
             source_page=page,
+            new_page_filename=new_page_filename,
+            new_page_relid=new_page_relid,
         )
 
         return new_page
