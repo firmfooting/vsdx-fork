@@ -19,7 +19,13 @@ logger = get_logger(__name__)
 
 
 class JinjaTemplatingMixin:
-    def jinja_render_vsdx(self, context: dict):
+    # attributes provided by the VisioFile host class
+    pages: list[Page]
+
+    def increment_sub_shape_ids(self, shape: Shape, page: Page, id_map: dict[str, int] | None = None) -> dict[str, int]: ...
+    def remove_page_by_index(self, index: int) -> None: ...
+
+    def jinja_render_vsdx(self, context: dict[str, object]) -> None:
         """Transform a template VisioFile object using the Jinja language
         The method updates the VisioFile object loaded from the template file, so does not return any value
         Note: vsdx specific extensions are available such as `{% for item in list %}` statements with no `{% endfor %}`
@@ -30,7 +36,7 @@ class JinjaTemplatingMixin:
         :return: None
         """
         # parse each shape in each page as Jinja2 template with context
-        pages_to_remove = []  # list of pages to be removed after loop
+        pages_to_remove: list[Page] = []
         for page in self.pages:  # type: Page
             # check if page should be removed
             if JinjaTemplatingMixin.jinja_page_showif(page, context):
@@ -38,7 +44,10 @@ class JinjaTemplatingMixin:
                 for shapes_by_id in page._shapes:  # type: Shape
                     JinjaTemplatingMixin.jinja_render_shape(shape=shapes_by_id, context=context, loop_shape_ids=loop_shape_ids)
 
-                source = ET.tostring(page.xml.getroot(), encoding="unicode")
+                page_root = page.xml.getroot()
+                if page_root is None:
+                    continue
+                source = ET.tostring(page_root, encoding="unicode")
                 source = JinjaTemplatingMixin.unescape_jinja_statements(source)  # unescape chars like < and > inside {%...%}
                 template = Template(source)
                 output = template.render(context)
@@ -47,13 +56,13 @@ class JinjaTemplatingMixin:
                 # update loop shape IDs which have been duplicated by Jinja template
                 page.set_max_ids()
                 for shape_id in loop_shape_ids:
-                    shapes_by_id = page._find_shapes_by_id(shape_id)  # type: List[Shape]
+                    shapes_by_id = page._find_shapes_by_id(shape_id)  # type: list[Shape]
                     if shapes_by_id and len(shapes_by_id) > 1:
-                        delta = 0
+                        delta = 0.0
                         for shape in shapes_by_id[1:]:  # from the 2nd onwards - leaving original unchanged
                             # increment each new shape duplicated by the jinja loop
                             self.increment_sub_shape_ids(shape, page)
-                            delta += shape.height  # automatically move each duplicate down
+                            delta += shape.height or 0.0  # automatically move each duplicate down
                             shape.move(0, -delta)  # move duplicated shapes so they are visible
             else:
                 # note page to remove after this loop has completed
@@ -61,10 +70,11 @@ class JinjaTemplatingMixin:
         # remove pages after processing
         for p in pages_to_remove:
             logger.debug("Removing page:'%s' index:%s", p.name, p.index_num)
-            self.remove_page_by_index(p.index_num)
+            if p.index_num is not None:
+                self.remove_page_by_index(p.index_num)
 
     @staticmethod
-    def jinja_render_shape(shape: Shape, context: dict, loop_shape_ids: list):
+    def jinja_render_shape(shape: Shape, context: dict[str, object], loop_shape_ids: list[str]):
         prev_shape = None
         for s in shape.child_shapes:  # type: Shape
             # manage for loops in template
@@ -77,9 +87,9 @@ class JinjaTemplatingMixin:
             JinjaTemplatingMixin.jinja_render_shape(shape=s, context=context, loop_shape_ids=loop_shape_ids)
 
     @staticmethod
-    def jinja_set_selfs(shape: Shape, context: dict):
+    def jinja_set_selfs(shape: Shape, context: dict[str, object]) -> None:
         # apply any {% self self.xxx = yyy %} statements in shape properties
-        jinja_source = shape.text
+        jinja_source = shape.text or ""
         matches = re.findall(r"{% set self.(.*?)\s?=\s?(.*?) %}", jinja_source)  # non-greedy search for all {%...%} strings
         for m in matches:  # type: tuple  # expect ('property', 'value') such as ('x', '10') or ('y', 'n*2')
             property_name = m[0]
@@ -102,7 +112,7 @@ class JinjaTemplatingMixin:
         shape.text = jinja_source
 
     @staticmethod
-    def unescape_jinja_statements(jinja_source):
+    def unescape_jinja_statements(jinja_source: str) -> str:
         # unescape any text between {% ... %}
         jinja_source_out = jinja_source
         matches = re.findall("{%(.*?)%}", jinja_source)  # non-greedy search for all {%...%} strings
@@ -129,11 +139,15 @@ class JinjaTemplatingMixin:
                 else:
                     previous_shape.xml.tail = jinja_loop_text  # add jinja loop text after previous shape, before this element
             else:
-                if shape.parent.xml.text:
-                    shape.parent.xml.text += jinja_loop_text
-                else:
-                    shape.parent.xml.text = jinja_loop_text  # add jinja loop at start of parent, just before this element
-            shape.text = shape.text.replace(jinja_loop_text, "")  # remove jinja loop from <Text> tag in element
+                parent_xml = shape.parent.xml
+                # Page.xml is an ElementTree; Shape.xml is an Element
+                parent_root = parent_xml.getroot() if isinstance(parent_xml, ET.ElementTree) else parent_xml
+                parent_text = parent_root.text or "" if parent_root is not None else ""
+                if parent_root is not None:
+                    parent_root.text = (
+                        parent_text + jinja_loop_text
+                    )  # add jinja loop at start of parent, just before this element
+            shape.text = (shape.text or "").replace(jinja_loop_text, "")  # remove jinja loop from <Text> tag in element
 
             # add closing 'endfor' to just inside the shapes element, after last shape
             if shape.xml.tail:  # extend or set text at end of Shape element
@@ -147,16 +161,19 @@ class JinjaTemplatingMixin:
             jinja_show_if = f"{{% if {show_if} %}}"  # translate to actual jinja if statement
             # move the for loop to start of shapes element (just before first Shape element)
             if previous_shape:
-                previous_shape.xml.tail = (
-                    str(previous_shape.xml.tail or "") + jinja_show_if
-                )  # add jinja loop text after previous shape, before this element
+                previous_shape.xml.tail = (previous_shape.xml.tail or "") + jinja_show_if
             else:
-                shape.parent.xml.text = (
-                    str(shape.parent.xml.text or "") + jinja_show_if
-                )  # add jinja loop at start of parent, just before this element
+                parent_xml = shape.parent.xml
+                # Page.xml is an ElementTree; Shape.xml is an Element
+                parent_root = parent_xml.getroot() if isinstance(parent_xml, ET.ElementTree) else parent_xml
+                parent_text = parent_root.text or "" if parent_root is not None else ""
+                if parent_root is not None:
+                    parent_root.text = (
+                        parent_text + jinja_show_if
+                    )  # add jinja loop at start of parent, just before this element
 
             # remove original jinja showif from <Text> tag in element
-            shape.text = shape.text.replace(f"{{% showif {show_if} %}}", "")
+            shape.text = (shape.text or "").replace(f"{{% showif {show_if} %}}", "")
 
             # add closing 'endfor' to just inside the shapes element, after last shape
             if shape.xml.tail:  # extend or set text at end of Shape element
@@ -168,7 +185,7 @@ class JinjaTemplatingMixin:
             return shape.ID  # return shape ID if it is a loop, so that duplicate shape IDs can be updated
 
     @staticmethod
-    def jinja_page_showif(page: Page, context: dict):
+    def jinja_page_showif(page: Page, context: dict[str, object]) -> bool:
         text = page.name
         jinja_source = re.findall(r"{% showif\s(.*?)\s%}", text)
         if len(jinja_source):
@@ -184,6 +201,8 @@ class JinjaTemplatingMixin:
                 logger.debug("value in ['False', '0', '', '()', '[]', '{}']")
                 return False  # page should be hidden
             # remove jinja statement from page name
-            jinja_statement = re.match("{%.*?%}", page.name)[0]
-            page.name = page.name.replace(jinja_statement, "")
+            page_name = page.name or ""
+            jinja_statement = re.match("{%.*?%}", page_name)
+            if jinja_statement:
+                page.name = page_name.replace(jinja_statement[0], "")
         return True  # page should be left in

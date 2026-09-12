@@ -1,62 +1,77 @@
-Quick Start Guide
-=================
-
-You can start using vdsx in just a few lines of code!
+Quick start
+===========
 
 Installation
 ------------
 
-vsdx is a python package - so like any package you can install from the terminal along with any missing dependencies using pip.
+``vsdxkit`` is not yet published on PyPI. Install the current GitHub version:
 
-``pip install vsdx``
+.. code-block:: console
 
-**Note:** You will need `Python 3.7+` to use vsdx
+   python -m pip install "vsdxkit @ git+https://github.com/shauneccles/vsdx.git"
 
-Opening your first vsdx file
-----------------------------
-
-Your first two lines of code will open a vsdx file.
+The distribution name and import name differ deliberately:
 
 .. code-block:: python
 
-   from vsdx import VisioFile  # import the package
+   from vsdx import VisioFile
 
-   vis = VisioFile('diagram.vsdx')  # create a VisioFile object from a file
+Python 3.10–3.14 is supported.
 
+Open a document
+---------------
 
-Making some changes
--------------------
-You might want to open a page, find a shape with the text 'foo' and replace it with 'bar'
-but first - let's use a context manager to make sure the file is closed when we are done
+Use :class:`vsdx.vsdxfile.VisioFile` as a context manager. This closes the
+package and any temporary resources when the block exits.
 
 .. code-block:: python
 
-    from vsdx import VisioFile  # import the package
+   from vsdx import VisioFile
 
-    with VisioFile('diagram.vsdx') as vis:
-        # open first page
-        page = vis.pages[0]  # type: VisioFile.Page
-        # find a shape by text
-        shape = page.find_shape_by_text('foo')  # type: VisioFile.Shape
-        shape.text = 'bar'
+   with VisioFile("diagram.vsdx") as vis:
+       page = vis.pages[0]
+       print(page.name)
 
+Find and edit a shape
+---------------------
 
-Saving a copy
+Finder methods return ``None`` when there is no match. Check the result before
+editing it.
+
+.. code-block:: python
+
+   with VisioFile("diagram.vsdx") as vis:
+       page = vis.pages[0]
+       shape = page.find_shape_by_text("Draft")
+
+       if shape is not None:
+           shape.text = "Approved"
+
+       vis.save_vsdx("approved.vsdx")
+
+Save in place
 -------------
-You'll want save your changes - lets just add that one line
+
+Call :meth:`vsdx.vsdxfile.VisioFile.save_vsdx` without a filename to replace
+the source file. Saving remains explicit; leaving the context manager does not
+save automatically.
 
 .. code-block:: python
 
-    from vsdx import VisioFile  # import the package
+   with VisioFile("diagram.vsdx") as vis:
+       vis.pages[0].name = "Current state"
+       vis.save_vsdx()
 
-    with VisioFile('diagram.vsdx') as vis:
-        # open first page
-        page = vis.pages[0]  # type: VisioFile.Page
-        # find a shape by text
-        shape = page.find_shape_by_text('foo')  # type: VisioFile.Shape
-        shape.text = 'bar'
-        vis.save_vsdx('copy_of_diagram.vsdx')  # save to a new file
+Development install
+-------------------
 
-and that's that.
+.. code-block:: console
 
-For more detailed examples please have a look at the tests.py file
+   git clone https://github.com/shauneccles/vsdx.git
+   cd vsdx
+   uv sync --locked --extra docs
+   uv run --no-sync python -m pytest tests -q
+   uv run --no-sync ruff check vsdx tests/test_imports.py tests/test_shape_coordinates.py
+   uv run --no-sync ruff format --check vsdx tests/test_imports.py tests/test_shape_coordinates.py
+   uv run --no-sync pyrefly check vsdx --min-severity warn --output-format min-text
+   uv run --no-sync sphinx-build -W --keep-going -b html docs docs/_build/html

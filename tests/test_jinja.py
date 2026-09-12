@@ -1,10 +1,11 @@
-import pytest
 import os
 from datetime import datetime
 
-from vsdx import Page  # for typing
-from vsdx import Shape  # for typing
-from vsdx import VisioFile
+import pytest
+
+from vsdx import (
+    VisioFile,
+)
 
 # code to get basedir of this test file in either linux/windows
 basedir = os.path.dirname(os.path.relpath(__file__))

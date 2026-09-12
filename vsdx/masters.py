@@ -10,6 +10,7 @@ from __future__ import annotations
 import copy as copy_module
 import io
 import xml.etree.ElementTree as ET
+from typing import TYPE_CHECKING, cast
 from xml.etree.ElementTree import Element
 
 from vsdx import document_rels_namespace, namespace, r_namespace
@@ -19,10 +20,25 @@ from .pages import Page
 from .shapes import Shape
 from .xmlio import file_to_xml, xml_to_file
 
+if TYPE_CHECKING:
+    from .vsdxfile import VisioFile
+
 logger = get_logger(__name__)
 
 
 class MastersImportMixin:
+    # attributes provided by the VisioFile host class
+    zip_file_contents: dict[str, io.BytesIO]
+    master_pages: list[Page]
+    master_index: dict[str, Page]
+    masters_xml: ET.Element | None
+    directory: str
+
+    @property
+    def _masters_folder(self) -> str: ...
+    def _add_content_types_override(self, part_name_path: str, content_type: str) -> None: ...
+    def _add_document_rel(self, rel_type: str, target: str) -> None: ...
+    def load_master_pages(self) -> None: ...
     def _ensure_masters_for_shape(self, source_shape: Shape) -> str:
         """Ensure this document contains the master that source_shape uses.
 
@@ -58,7 +74,7 @@ class MastersImportMixin:
         # already present in this document, by name?
         existing = self.master_index.get(master_name)
         if existing is not None:
-            return str(existing.page_id)
+            return existing.page_id
 
         source_master_page = src_vis.get_master_page_by_id(master_ref)
         if source_master_page is None or source_master_page.filename not in src_vis.zip_file_contents:
@@ -77,11 +93,12 @@ class MastersImportMixin:
         self.zip_file_contents[part_path] = src_vis.zip_file_contents[source_master_page.filename]
 
         # 2. ensure this document has a masters.xml to append to
-        if self.masters_xml is None or isinstance(self.masters_xml, list):
+        if self.masters_xml is None:
             self._bootstrap_masters()
 
         # 3. append the Master element with a fresh logical ID
-        numeric_ids = [int(m.attrib["ID"]) for m in self.masters_xml if str(m.attrib.get("ID", "")).isdigit()]
+        assert self.masters_xml is not None  # bootstrap above guarantees it
+        numeric_ids = [int(m.attrib["ID"]) for m in self.masters_xml if m.attrib.get("ID", "").isdigit()]
         new_id = max(numeric_ids, default=1) + 1
         if new_id < 2:
             new_id = 2
@@ -141,8 +158,16 @@ class MastersImportMixin:
 
         # 6. register the new master directly - a full load_master_pages()
         # reload would re-append every existing master to master_pages
+        master_page_xml = file_to_xml(final_part_path, self.zip_file_contents)
+        if master_page_xml is None:
+            raise ValueError(f"imported master part {final_part_path} missing from package")
         new_master_page = Page(
-            file_to_xml(final_part_path, self.zip_file_contents), final_part_path, master_name, str(new_id), new_rel_id, self
+            master_page_xml,
+            final_part_path,
+            master_name,
+            str(new_id),
+            new_rel_id,
+            cast("VisioFile", self),
         )
         new_master_page.master_unique_id = new_master_element.attrib.get("UniqueID")
         new_master_page.master_base_id = new_master_element.attrib.get("BaseID")

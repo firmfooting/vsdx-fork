@@ -107,22 +107,23 @@ class Container:
             for s in self._top_level_named("Swimlane")
             if s.shape_name and s.shape_name.startswith("Swimlane") and not s.shape_name.startswith("Swimlane List")
         ]
-        lanes.sort(key=lambda s: -s.y)  # top-to-bottom
+        lanes.sort(key=lambda s: -(s.y or 0.0))  # top-to-bottom
         return lanes
 
     # ---- geometry --------------------------------------------------------
 
     @staticmethod
-    def lane_band(lane: Shape):
+    def lane_band(lane: Shape) -> tuple[float, float]:
         """(bottom, top) Y band of a lane, from its centre and height."""
+        centre = lane.y or 0.0
         height = lane.height or LANE_PITCH_INCHES
-        return lane.y - height / 2, lane.y + height / 2
+        return centre - height / 2, centre + height / 2
 
     def lane_of(self, shape: Shape) -> Shape | None:
         """The lane whose band contains the shape's centre, or None."""
         for lane in self.lanes:
             bottom, top = self.lane_band(lane)
-            if bottom <= shape.y <= top:
+            if bottom <= (shape.y or 0.0) <= top:
                 return lane
         return None
 
@@ -136,7 +137,7 @@ class Container:
                 continue
             if "BeginX" in shape.cells:  # connectors are not members
                 continue
-            if bottom <= shape.y <= top:
+            if bottom <= (shape.y or 0.0) <= top:
                 result.append(shape)
         return result
 
@@ -163,17 +164,17 @@ class Container:
         shapes_tag.append(new_xml)
         new_lane = Shape(xml=new_xml, parent=self.page, page=self.page)
 
-        new_lane.get_or_create_cell("PinY", v=str(top_lane.y + LANE_PITCH_INCHES))
+        new_lane.get_or_create_cell("PinY", v=str((top_lane.y or 0.0) + LANE_PITCH_INCHES))
 
         # grow the list and container so the new lane sits inside them
         pitch = LANE_PITCH_INCHES
         lane_list = self.swimlane_list
         if lane_list is not None:
-            lane_list.get_or_create_cell("PinY", v=str(lane_list.y + pitch / 2))
+            lane_list.get_or_create_cell("PinY", v=str((lane_list.y or 0.0) + pitch / 2))
             lane_list.get_or_create_cell("Height", v=str((lane_list.height or 0) + pitch))
         container = self.container_shape
         if container is not None:
-            container.get_or_create_cell("PinY", v=str(container.y + pitch / 2))
+            container.get_or_create_cell("PinY", v=str((container.y or 0.0) + pitch / 2))
             container.get_or_create_cell("Height", v=str((container.height or 0) + pitch))
 
         if label:
@@ -198,11 +199,11 @@ class Container:
                 return child
         return None
 
-    def add_shape_to_lane(self, shape: Shape, lane: Shape):
+    def add_shape_to_lane(self, shape: Shape, lane: Shape) -> None:
         """Assign a shape to a lane by geometry: set the shape's PinY to the
         lane's centre, keeping its PinX. Mirrors Visio's own behaviour when a
         shape is dragged into a lane; membership stays geometric.
         """
         if self.lane_of(shape) is lane:
             return
-        shape.get_or_create_cell("PinY", v=str(lane.y))
+        shape.get_or_create_cell("PinY", v=str(lane.y or 0.0))

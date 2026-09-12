@@ -14,8 +14,9 @@ authors = [
 ]
 requires-python = ">=3.10"
 dependencies = [
-    "Jinja2",
-    "deprecation",
+    "Jinja2>=3.1.6",
+    "deprecation>=2.1.0",
+    "typing-extensions>=4.4.0; python_version < '3.12'",
 ]
 dynamic = ["version"]
 keywords = ["vsdx", "visio", "diagram", "flowchart", "swagger", "opcn"]
@@ -35,19 +36,37 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://github.com/shauneccles/vsdx"
-Documentation = "https://vsdx.readthedocs.io/en/latest/"
-"Upstream" = "https://github.com/dave-howard/vsdx"
+Documentation = "https://github.com/shauneccles/vsdx/tree/main/docs"
+Issues = "https://github.com/shauneccles/vsdx/issues"
+Upstream = "https://github.com/dave-howard/vsdx"
 
 [project.optional-dependencies]
+docs = [
+    "sphinx==8.1.3",
+    "sphinx-rtd-theme==3.1.0",
+]
+
+[dependency-groups]
+test = [
+    "pytest>=8.4.0",
+]
+lint = [
+    "ruff==0.16.7",
+    "pyrefly==1.3.0",
+]
+build = [
+    "build==1.6.1",
+]
 dev = [
-    "pytest",
-    "pytest-cov",
-    "ruff",
-    "pyrefly",
+    { include-group = "test" },
+    { include-group = "lint" },
+    { include-group = "build" },
+    "pytest-cov>=6.2.1",
 ]
 
 [tool.setuptools]
 packages = ["vsdx"]
+include-package-data = false
 
 [tool.setuptools.package-data]
 vsdx = ["media/*.vsdx", "py.typed"]
@@ -79,6 +98,5 @@ ignore = ["E501"]
 
 [tool.pyrefly]
 project-includes = ["vsdx"]
-# basic preset: the ratchet start point. Tighten per-error-config as
-# annotations improve (see roadmap).
-preset = "basic"
+# strict preset: the package type-checks clean at this level, so keep it there
+preset = "strict"

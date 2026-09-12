@@ -1,6 +1,8 @@
 """Tests for connector retargeting (re-anchor)."""
 import zipfile
 
+import pytest
+
 from vsdx import VisioFile
 
 BASE = 'test8_simple_connector.vsdx'
@@ -58,8 +60,19 @@ def test_retarget_unconnected_connector_raises(vsdx_copy):
             if rc.from_id == str(connector.ID):
                 page.remove_connect_records([connector.ID])
                 break
-        try:
+        with pytest.raises(ValueError):
             page.reanchor_connector(connector, to_shape=b)
-            assert False, 'expected ValueError'
-        except ValueError:
-            pass
+
+
+def test_remove_connect_records_normalises_integer_ids(vsdx_copy):
+    with VisioFile(vsdx_copy(BASE)) as vis:
+        page = vis.pages[0]
+        a = page.find_shape_by_text('Shape A')
+        b = page.find_shape_by_text('Shape B')
+        assert a is not None and b is not None
+        connector = page.connect_shapes(a, b)
+        connector_id = str(connector.ID)
+
+        assert any(record.from_id == connector_id for record in page.connects)
+        page.remove_connect_records([int(connector_id)])
+        assert all(record.from_id != connector_id for record in page.connects)

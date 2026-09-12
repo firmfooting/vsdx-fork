@@ -1,40 +1,68 @@
-vsdx Key Classes
-================
+API reference
+=============
 
-There are a few key classes in the vsdx package that relate to elements of a vsdx file
+The distribution installs as ``vsdxkit`` but keeps the ``vsdx`` import
+namespace.
 
+VisioFile
+---------
 
-vsdx.VisioFile
---------------
+.. autoclass:: vsdx.vsdxfile.VisioFile
+   :members: add_page, add_page_at, copy_page, create_shape, get_page_by_name, jinja_render_vsdx, remove_page_by_index, remove_page_by_name, save_vsdx
+   :undoc-members:
+   :special-members: __init__, __enter__, __exit__
 
-.. autoclass:: vsdx.VisioFile
-   :members: apply_text_context, jinja_render_vsdx, get_page_by_name, remove_page_by_index, add_page, add_page_at, copy_page, save_vsdx
-   :special-members: __init__
+Page and PagePosition
+---------------------
 
-vsdx.VisioFile.Page
--------------------
+.. autoclass:: vsdx.pages.Page
+   :members: all_shapes, child_shapes, connect_shapes, connects, delete_shape, find_shape_by_id, find_shape_by_text, find_shapes_by_text, get_connectors_between, get_container, add_swimlane, add_shape_to_lane, reanchor_connector
+   :undoc-members:
 
-.. autoclass:: vsdx.VisioFile.Page
+.. autoclass:: vsdx.pages.PagePosition
    :members:
-   :special-members: __init__
+   :undoc-members:
 
-vsdx.VisioFile.Shape
---------------------
+Shape, Cell and DataProperty
+----------------------------
 
-.. autoclass:: vsdx.VisioFile.Shape
+.. autoclass:: vsdx.shapes.Shape
+   :members: all_shapes, bounds, cell_value, cells, center_x_y, child_shapes, connected_shapes, connects, copy, data_properties, fill_color, find_replace, find_shape_by_text, find_shapes_by_text, geometry, get_or_create_cell, height, line_color, line_weight, move, remove, shape_name, text, text_color, width, x, y
+   :undoc-members:
+
+.. autoclass:: vsdx.shapes.Cell
    :members:
-   :special-members: __init__
+   :undoc-members:
 
-vsdx.VisioFile.Cell
--------------------
-
-.. autoclass:: vsdx.VisioFile.Cell
+.. autoclass:: vsdx.shapes.DataProperty
    :members:
-   :special-members: __init__
+   :undoc-members:
 
-vsdx.VisioFile.Connect
-----------------------
+Connect and Container
+---------------------
 
-.. autoclass:: vsdx.VisioFile.Connect
-   :members:
-   :special-members: __init__
+.. autoclass:: vsdx.connectors.Connect
+   :members: connector_shape, connector_shape_id, shape, shape_id
+   :undoc-members:
+
+Connection records also expose the raw ``from_id``, ``to_id``, ``from_rel``
+and ``to_rel`` values from the Visio ``Connect`` element. ``from_id`` is the
+connector shape ID. ``to_id`` is the connected shape ID. The relationship
+fields identify the source and target cells, such as ``BeginX``, ``EndX``,
+``PinX`` or ``Connections.X1``.
+
+.. py:attribute:: vsdx.connectors.Connect.from_id
+   :type: str | None
+
+.. py:attribute:: vsdx.connectors.Connect.to_id
+   :type: str | None
+
+.. py:attribute:: vsdx.connectors.Connect.from_rel
+   :type: str | None
+
+.. py:attribute:: vsdx.connectors.Connect.to_rel
+   :type: str | None
+
+.. autoclass:: vsdx.containers.Container
+   :members: add_shape_to_lane, add_swimlane, container_shape, find, lane_band, lane_heading, lane_of, lanes, members, set_lane_label, swimlane_list
+   :undoc-members:

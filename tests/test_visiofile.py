@@ -1,38 +1,75 @@
 """Pytest Tests for VisioFile class"""
-import os
 import io
+import os
+import xml.etree.ElementTree as ET
+import zipfile
+from pathlib import Path
+from xml.etree.ElementTree import Element
 
 import pytest
-from xml.etree.ElementTree import Element
-import xml.etree.ElementTree as ET
 
-from vsdx import ext_prop_namespace
-from vsdx import namespace
-from vsdx import vt_namespace
-
-from vsdx import Media
-from vsdx import Page
-from vsdx import PagePosition
-from vsdx import Shape
-from vsdx import VisioFile
+from vsdx import Media, PagePosition, VisioFile, ext_prop_namespace, namespace, vt_namespace
 from vsdx.vsdxfile import file_to_xml
-
 
 # code to get basedir of this test file in either linux/windows
 basedir = os.path.dirname(os.path.relpath(__file__))
 
+
+def _media_filename() -> str:
+    media = Media()
+    try:
+        return media.media.filename
+    finally:
+        media.close()
+
 # file structure
+
+
+def test_apply_text_context_coerces_non_string_values():
+    root = ET.fromstring(
+        f'<PageContents xmlns="{namespace[1:-1]}"><Shapes><Shape ID="1"><Text>Year {{{{year}}}}</Text></Shape></Shapes></PageContents>'
+    )
+
+    VisioFile.apply_text_context(root, {"year": 2020})
+
+    shape = root.find(f".//{namespace}Shape")
+    assert shape is not None
+    assert VisioFile.get_shape_text(shape) == "Year 2020"
+
+
+def test_insert_shape_rejects_mismatched_page_path(vsdx_copy):
+    filename = vsdx_copy("test2.vsdx")
+    shape = ET.fromstring(f'<Shape xmlns="{namespace[1:-1]}" ID="1" />')
+    shapes = Element(f"{namespace}Shapes")
+
+    with VisioFile(filename) as vis:
+        with pytest.raises(ValueError, match="does not match"):
+            vis.insert_shape(shape, shapes, vis.pages[0], "not-the-page.xml")
+
+    assert len(shapes) == 0
+
+
+def test_insert_shape_accepts_equivalent_mixed_separator_path(vsdx_copy):
+    filename = vsdx_copy("test2.vsdx")
+    shape = ET.fromstring(f'<Shape xmlns="{namespace[1:-1]}" ID="1" />')
+    shapes = Element(f"{namespace}Shapes")
+
+    with VisioFile(filename) as vis:
+        page = vis.pages[0]
+        page_path = page.filename.replace("/", "\\")
+        result = vis.insert_shape(shape, shapes, page, page_path)
+
+    assert result is shapes
+    assert len(shapes) == 1
 
 
 def test_invalid_file_type():
     """Test that opening an invalid file name results in a TypeError"""
     filename = __file__
     print(f"Opening invalid but existing {filename}")
-    try:
+    with pytest.raises(TypeError):
         with VisioFile(filename):
-            assert False  # don't expect to get here
-    except TypeError as error:
-        print(type(error), error)  # expect to get here
+            pass
 
 
 @pytest.mark.parametrize("filename", [
@@ -50,7 +87,7 @@ def test_open_rel_path(filename: str):
 
 def test_open_abs_path():
     # test opening media file (not in tests directory)with absolute path
-    media_file_path = Media()._media_vsdx.filename
+    media_file_path = _media_filename()
     filename = os.path.abspath(media_file_path)
 
     assert os.path.exists(filename)
@@ -59,9 +96,31 @@ def test_open_abs_path():
             print(page.name)
 
 
+def test_page_relationship_lookup_uses_opc_path_separator():
+    from vsdx.vsdxfile import _page_relationship_path
+
+    rel_dir = "C:\\diagram/visio/pages/_rels/"
+    page_path = "C:\\diagram/visio/pages/page1.xml"
+
+    assert _page_relationship_path(rel_dir, page_path) == f"{rel_dir}page1.xml.rels"
+
+
+def test_close_does_not_delete_same_stem_directory(vsdx_copy):
+    filename = Path(vsdx_copy("test1.vsdx"))
+    sibling = filename.with_suffix("")
+    sibling.mkdir()
+    marker = sibling / "keep.txt"
+    marker.write_text("keep")
+
+    vis = VisioFile(str(filename))
+    vis.close_vsdx()
+
+    assert marker.read_text() == "keep"
+
+
 def test_open_abs_path_save_rel_path():
     # test opening media file (not in tests directory)with absolute path
-    media_file_path = Media()._media_vsdx.filename
+    media_file_path = _media_filename()
     filename = os.path.abspath(media_file_path)
 
     assert os.path.exists(filename)
@@ -72,7 +131,7 @@ def test_open_abs_path_save_rel_path():
 
 def test_open_abs_path_save_abs_path():
     # test opening media file (not in tests directory)with absolute path
-    media_file_path = Media()._media_vsdx.filename
+    media_file_path = _media_filename()
     filename = os.path.abspath(media_file_path)
 
     assert os.path.exists(filename)
@@ -346,6 +405,28 @@ def test_app_xml_page_names_after_add_page(filename: str, new_page_name: str, lo
             page_name = lpstr.text
             app_xml_page_names.append(page_name)
         assert page_names == app_xml_page_names
+
+
+def test_copy_page_clones_relationship_part(vsdx_copy, tmp_path):
+    filename = vsdx_copy("test4_connectors.vsdx")
+    output = tmp_path / "copied-page.vsdx"
+
+    with VisioFile(filename) as vis:
+        source = vis.pages[0]
+        assert source.rels_xml is not None
+        source_rels = ET.tostring(source.rels_xml.getroot())
+
+        copied = vis.copy_page(source)
+
+        assert copied.rels_xml is not None
+        assert copied.rels_xml is not source.rels_xml
+        assert ET.tostring(copied.rels_xml.getroot()) == source_rels
+        assert copied.rels_xml_filename is not None
+        member = copied.rels_xml_filename.removeprefix(f"{vis.directory}/")
+        vis.save_vsdx(str(output))
+
+    with zipfile.ZipFile(output) as archive:
+        assert member in archive.namelist()
 
 
 @pytest.mark.parametrize(('filename', 'index', 'page_name'),

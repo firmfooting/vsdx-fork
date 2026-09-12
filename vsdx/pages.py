@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from enum import IntEnum
 from typing import TYPE_CHECKING
 
@@ -17,6 +18,7 @@ from vsdx import namespace
 
 from .connectors import Connect
 from .shapes import Shape
+from .xmlio import require_element
 
 
 class PagePosition(IntEnum):
@@ -25,6 +27,14 @@ class PagePosition(IntEnum):
     END = -1
     AFTER = -2
     BEFORE = -3
+
+
+def _pages_root(vis: VisioFile) -> ET.Element:
+    """The required root element of the document's pages.xml part."""
+    pages_xml = vis.pages_xml
+    if pages_xml is None:
+        raise ValueError("document has no pages.xml part")
+    return require_element(pages_xml.getroot(), "Pages root")
 
 
 class Page:
@@ -39,17 +49,21 @@ class Page:
 
     """
 
-    def __init__(self, xml: ET.ElementTree, filename: str, page_name: str, page_id: str, rel_id: str, vis: VisioFile):
+    xml: ET.ElementTree[ET.Element]
+
+    def __init__(
+        self, xml: ET.ElementTree[ET.Element], filename: str, page_name: str, page_id: str, rel_id: str, vis: VisioFile
+    ):
         self._xml = xml
         self.filename = filename
         self._name = page_name
-        self._background = None
+        self._background: bool | None = None
         self.page_id = page_id
         self.rel_id = rel_id
-        self.master_unique_id = None
-        self.master_base_id = None
-        self.rels_xml_filename = None
-        self.rels_xml = None  # type: ET.ElementTree
+        self.master_unique_id: str | None = None
+        self.master_base_id: str | None = None
+        self.rels_xml_filename: str | None = None
+        self.rels_xml: ET.ElementTree[ET.Element] | None = None
         self.vis = vis
         self.max_id = 0
         # todo: add page id - from pages_xml - PageSheet[ID]
@@ -71,102 +85,124 @@ class Page:
         pages = file_to_xml(
             pages_filename, self.vis.zip_file_contents
         )  # this contains a list of pages with rel_id and filename
-        page = pages.getroot().find(f"{namespace}Page[{self.index_num + 1}]")
+        if pages is None:
+            raise ValueError(f"no pages.xml part found at {pages_filename}")
+        pages_root = require_element(pages.getroot(), "Pages root")
+        page = pages_root.find(f"{namespace}Page[{self._index() + 1}]")
         if page:
             page.attrib["Name"] = value
             self.name = value
             self.vis.pages_xml = pages
 
     @property
-    def name(self):
+    def name(self) -> str:
         if self._name:
             return self._name
-        name = self.vis.pages_xml.find(f"{namespace}Page[{self.index_num + 1}]").attrib["Name"]
-        name_u = self.vis.pages_xml.find(f"{namespace}Page[{self.index_num + 1}]").attrib["NameU"]
-        return name_u or name or self._name  # return unicode name, or name if NameU not set
+        page = self._page_xml()
+        name = page.attrib.get("Name")
+        name_u = page.attrib.get("NameU")
+        return name_u or name or self._name or ""
 
     @name.setter
-    def name(self, value):
-        self.vis.pages_xml.find(f"{namespace}Page[{self.index_num + 1}]").attrib["Name"] = str(value)
-        self.vis.pages_xml.find(f"{namespace}Page[{self.index_num + 1}]").attrib["NameU"] = str(value)
-        self._name = str(value)
+    def name(self, value: str) -> None:
+        page = self._page_xml()
+        page.attrib["Name"] = value
+        page.attrib["NameU"] = value
+        self._name = value
+
+    def _index(self) -> int:
+        """Zero-based index of this page in its VisioFile (required)."""
+        index = self.index_num
+        if index is None:
+            raise ValueError("page is not attached to a VisioFile")
+        return index
+
+    def _page_xml(self) -> ET.Element:
+        """The Pages/Page element for this page (from pages.xml)."""
+        root = _pages_root(self.vis)
+        position = self._index() + 1
+        return require_element(root.find(f"{namespace}Page[{position}]"), f"Page[{position}]")
 
     @property
-    def background(self):
+    def background(self) -> bool:
         if self._background is not None:
             return self._background
-        bg = self.vis.pages_xml.find(f"{namespace}Page[{self.index_num + 1}]").attrib.get("Background", "0") != "0"
+        bg = self._page_xml().attrib.get("Background", "0") != "0"
         self._background = bg
         return self._background
 
     @background.setter
-    def background(self, value):
-        value = bool(value)
-        if value:
-            self.vis.pages_xml.find(f"{namespace}Page[{self.index_num + 1}]").attrib["Background"] = "1"
-        else:
-            self.vis.pages_xml.find(f"{namespace}Page[{self.index_num + 1}]").attrib["Background"] = "0"
+    def background(self, value: bool) -> None:
+        self._page_xml().attrib["Background"] = "1" if value else "0"
         self._background = value
 
-    @property
-    @deprecation.deprecated(
-        deprecated_in="v0.5.0", removed_in="1.0.0", current_version=vsdx.__version__, details="Use Page.name property instead"
-    )
-    def page_name(self):
+    def _get_page_name(self) -> str:
         return self.name
 
-    @page_name.setter
-    @deprecation.deprecated(
-        deprecated_in="v0.5.0", removed_in="1.0.0", current_version=vsdx.__version__, details="Use Page.name property instead"
-    )
-    def page_name(self, value):
+    def _set_page_name(self, value: str) -> None:
         self.name = value
+
+    # built explicitly: the deprecation wrapper returns a plain function, so it
+    # cannot be composed with @property/@x.setter (type checkers lose the setter)
+    page_name = property(
+        deprecation.deprecated(
+            deprecated_in="v0.5.0", removed_in="1.0.0", current_version=vsdx.__version__, details="Use Page.name instead"
+        )(_get_page_name),
+        deprecation.deprecated(
+            deprecated_in="v0.5.0", removed_in="1.0.0", current_version=vsdx.__version__, details="Use Page.name instead"
+        )(_set_page_name),
+        doc="Deprecated alias for :attr:`Page.name`.",
+    )
 
     @property
     def is_master_page(self) -> bool:
         """Return True if this page has a master unique id and there is a match in masters xml"""
-        if isinstance(self.vis.masters_xml, ET.Element) and self.master_unique_id:
+        if self.vis.masters_xml is not None and self.master_unique_id:
             master_match = f'{namespace}Master[@UniqueID="{self.master_unique_id}"]'
             master_element = self.vis.masters_xml.find(master_match)
             return master_element is not None
         return False
 
     @property
-    def _pagesheet_xml(self):
+    def _pagesheet_xml(self) -> ET.Element:
         # get PageSheet element from pages_xml based on page_id
-        ps = self.vis.pages_xml.find(f'{namespace}Page[@ID="{self.page_id}"]/{namespace}PageSheet')
+        ps = _pages_root(self.vis).find(f'{namespace}Page[@ID="{self.page_id}"]/{namespace}PageSheet')
         if not isinstance(ps, ET.Element):
-            ps = self.vis.masters_xml.find(f'{namespace}Master[@ID="{self.page_id}"]/{namespace}PageSheet')
-        return ps
+            masters_xml = self.vis.masters_xml
+            if masters_xml is not None:
+                ps = masters_xml.find(f'{namespace}Master[@ID="{self.page_id}"]/{namespace}PageSheet')
+        return require_element(ps, f"PageSheet for page_id={self.page_id}")
+
+    def _pagesheet_cell(self, name: str) -> ET.Element:
+        """A named Cell element on this page's PageSheet."""
+        return require_element(self._pagesheet_xml.find(f'{namespace}Cell[@N="{name}"]'), f"PageSheet Cell {name}")
 
     @property
-    def width(self):
-        return float(self._pagesheet_xml.find(f'{namespace}Cell[@N="PageWidth"]').attrib.get("V"))
+    def width(self) -> float:
+        return float(self._pagesheet_cell("PageWidth").attrib.get("V", 0.0))
 
     @width.setter
-    def width(self, value):
-        value = float(value)
-        self._pagesheet_xml.find(f'{namespace}Cell[@N="PageWidth"]').attrib["V"] = str(value)
+    def width(self, value: float | str | None) -> None:
+        self._pagesheet_cell("PageWidth").attrib["V"] = str(float(value or 0.0))
 
     @property
-    def height(self):
-        return float(self._pagesheet_xml.find(f'{namespace}Cell[@N="PageHeight"]').attrib.get("V"))
+    def height(self) -> float:
+        return float(self._pagesheet_cell("PageHeight").attrib.get("V", 0.0))
 
     @height.setter
-    def height(self, value):
-        value = float(value)
-        self._pagesheet_xml.find(f'{namespace}Cell[@N="PageHeight"]').attrib["V"] = str(value)
+    def height(self, value: float | str | None) -> None:
+        self._pagesheet_cell("PageHeight").attrib["V"] = str(float(value or 0.0))
 
     @property
-    def xml(self):
+    def xml(self) -> ET.ElementTree[ET.Element]:
         return self._xml
 
     @xml.setter
-    def xml(self, value):
+    def xml(self, value: ET.ElementTree[ET.Element]) -> None:
         self._xml = value
 
     @property
-    def _shapes(self):
+    def _shapes(self) -> list[Shape]:
         """Return a list of :class:`Shape` objects - for each 'Shapes'
 
         Note: typically returns one :class:`Shape` object which itself contains :class:`Shape` objects
@@ -199,18 +235,19 @@ class Page:
         return self.child_shapes
 
     @property
-    def child_shapes(self):
+    def child_shapes(self) -> list[Shape]:
         """Return list of Shape objects at top level of VisioFile.Page
 
         :returns: list of `Shape` objects
         :rtype: List[Shape]
         """
         # note that self.shapes should always return a single shape
-        if self._shapes:
-            return self._shapes[0].child_shapes
+        shapes = self._shapes
+        if shapes:
+            return shapes[0].child_shapes
         return []  # empty list if no top shapes object
 
-    def set_max_ids(self):
+    def set_max_ids(self) -> int:
         # get maximum shape id from xml in page
         for shapes in self._shapes:
             for shape in shapes.child_shapes:
@@ -221,19 +258,19 @@ class Page:
         return self.max_id
 
     @property
-    def index_num(self):
+    def index_num(self) -> int | None:
         # return zero-based index of this page in parent VisioFile.pages list
         return self.vis.pages.index(self) if self in self.vis.pages else None
 
-    def add_connect(self, connect: Connect):
+    def add_connect(self, connect: Connect) -> None:
         connects = self.xml.find(f".//{namespace}Connects")
         if connects is None:
             connects = ET.fromstring(
                 f"<Connects xmlns='{namespace[1:-1]}' xmlns:r='http://schemas.openxmlformats.org/officeDocument/2006/relationships'/>"
             )
-            self.xml.getroot().append(connects)
-            connects = self.xml.find(f".//{namespace}Connects")
-
+            root = require_element(self.xml.getroot(), "page root")
+            root.append(connects)
+            connects = require_element(self.xml.find(f".//{namespace}Connects"), "Connects")
         connects.append(connect.xml)
 
     def _ensure_page_master_rel(self, master_rel_id: str, master_part_name: str):
@@ -275,31 +312,35 @@ class Page:
 
     def get_connectors_between(
         self, shape_a_id: str = "", shape_a_text: str = "", shape_b_id: str = "", shape_b_text: str = ""
-    ):
+    ) -> set[Shape]:
         shape_a = self.find_shape_by_id(shape_a_id) if shape_a_id else self.find_shape_by_text(shape_a_text)
         shape_b = self.find_shape_by_id(shape_b_id) if shape_b_id else self.find_shape_by_text(shape_b_text)
-        connector_ids = set(a.ID for a in shape_a.connected_shapes).intersection(set(b.ID for b in shape_b.connected_shapes))
+        if shape_a is None or shape_b is None:
+            raise ValueError("get_connectors_between() requires two shapes that exist on this page")
+        connector_ids = {a.ID for a in shape_a.connected_shapes}.intersection({b.ID for b in shape_b.connected_shapes})
 
-        connectors = set()
-        for id in connector_ids:
-            connectors.add(self.find_shape_by_id(id))
+        connectors: set[Shape] = set()
+        for connector_id in connector_ids:
+            found = self.find_shape_by_id(connector_id or "")
+            if found is not None:
+                connectors.add(found)
         return connectors
 
-    def apply_text_context(self, context: dict):
+    def apply_text_context(self, context: dict[str, object]) -> None:
         for s in self._shapes:
             s.apply_text_filter(context)
 
-    def find_replace(self, old: str, new: str):
+    def find_replace(self, old: str, new: str) -> None:
         for s in self._shapes:
             s.find_replace(old, new)
 
-    def find_shape_by_id(self, shape_id) -> Shape:
+    def find_shape_by_id(self, shape_id: str) -> Shape | None:
         for s in self._shapes:
             found = s.find_shape_by_id(shape_id)
             if found:
                 return found
 
-    def _find_shapes_by_id(self, shape_id) -> list[Shape]:
+    def _find_shapes_by_id(self, shape_id: str) -> list[Shape]:
         # return all shapes by ID - should only be used internally where ID is not unique (i.e. copying shapes)
         found = list()
         for s in self._shapes:
@@ -308,7 +349,7 @@ class Page:
                 return found
         return found
 
-    def find_shape_by_attr(self, attr, attr_value) -> Shape:
+    def find_shape_by_attr(self, attr: str, attr_value: str) -> Shape | None:
         for s in self._shapes:
             found = s.find_shape_by_attr(attr, attr_value)
             if found:
@@ -322,7 +363,7 @@ class Page:
             if s.master_shape_ID == shape.master_shape_ID and s.master_page_ID == shape.master_page_ID
         ]
 
-    def find_shape_by_text(self, text: str) -> Shape:
+    def find_shape_by_text(self, text: str) -> Shape | None:
         for s in self._shapes:
             found = s.find_shape_by_text(text)
             if found:
@@ -341,11 +382,12 @@ class Page:
         return self._shapes[0].find_shapes_by_regex(regex) if len(self._shapes) else []
 
     @property
-    def all_shapes(self):
+    def all_shapes(self) -> list[Shape]:
         # return all shapes in page
-        return self._shapes[0].all_shapes if len(self._shapes) else []
+        shapes = self._shapes
+        return shapes[0].all_shapes if shapes else []
 
-    def find_shape_by_property_label(self, property_label: str) -> Shape:
+    def find_shape_by_property_label(self, property_label: str) -> Shape | None:
         """Search for shapes in this page's top shape by property label"""
         # note: use label rather than name as label is more easily visible in diagram
         return self._shapes[0].find_shape_by_property_label(property_label) if len(self._shapes) else None
@@ -359,7 +401,7 @@ class Page:
                 shapes.extend(found)
         return shapes
 
-    def find_shape_by_property_label_value(self, property_label: str, property_value: str) -> Shape:
+    def find_shape_by_property_label_value(self, property_label: str, property_value: str) -> Shape | None:
         # return first matching shape with label
         # note: use label rather than name as label is more easily visible in diagram
         for s in self._shapes:
@@ -389,19 +431,16 @@ class Page:
         :returns: the new connector Shape
         :rtype: Shape
         """
-        parts = route.split("|") if route else []
-        glue = "point" if "point" in parts else "dynamic"
-        behaviour = next((p for p in parts if p in ("straight", "rightangle", "curved")), None)
         return vsdx.Connect.create(
-            page=self, from_shape=from_shape, to_shape=to_shape, route=behaviour or glue, from_cp=from_cp, to_cp=to_cp
+            page=self, from_shape=from_shape, to_shape=to_shape, route=route, from_cp=from_cp, to_cp=to_cp
         )
 
-    def get_container(self) -> vsdx.Container:
+    def get_container(self) -> vsdx.Container | None:
         """Return the page's CFF Container (swimlane diagram root), or None."""
         return vsdx.Container.find(self)
 
     def add_swimlane(self, label: str | None = None) -> Shape:
-        """Add a swimlane to this page's CFF Container (clones the last lane).
+        """Add a swimlane to this page's CFF Container by cloning its top lane.
 
         :returns: the new lane Shape
         """
@@ -410,8 +449,8 @@ class Page:
             raise ValueError("page has no CFF Container")
         return container.add_swimlane(label)
 
-    def add_shape_to_lane(self, shape: Shape, lane: Shape):
-        """Move a shape into a swimlane lane (membership is tree containment)."""
+    def add_shape_to_lane(self, shape: Shape, lane: Shape) -> None:
+        """Move a shape so its centre lies within a CFF swimlane's geometric band."""
         container = self.get_container()
         if container is None:
             raise ValueError("page has no CFF Container")
@@ -468,16 +507,16 @@ class Page:
                 shapes_el.remove(shape.xml)
                 break
 
-    def remove_connect_records(self, connector_ids):
+    def remove_connect_records(self, connector_ids: Iterable[str | int]) -> None:
         """Remove all Connect records whose FromSheet is one of connector_ids.
 
         Single record-removal path, shared by the delete cascade and
         connector retargeting.
         """
-        ids = {str(i) for i in connector_ids}
         connects_el = self.xml.find(f".//{namespace}Connects")
         if connects_el is None:
             return
+        normalised_ids = {str(connector_id) for connector_id in connector_ids}
         for connect in list(connects_el):
-            if connect.attrib.get("FromSheet") in ids:
+            if connect.attrib.get("FromSheet") in normalised_ids:
                 connects_el.remove(connect)

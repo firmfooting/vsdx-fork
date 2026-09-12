@@ -11,7 +11,20 @@ from .shapes import Shape
 class Connect:
     """Connect class to represent a connection between two `Shape` objects"""
 
-    def __init__(self, xml: Element | None = None, page: vsdx.Page = None):
+    @staticmethod
+    def _parse_route(route: str) -> tuple[bool, str | None]:
+        """Return point-glue and routing choices after validating route tokens."""
+        route_parts: list[str] = route.split("|") if route else []
+        allowed_parts = {"dynamic", "point", "straight", "rightangle", "curved"}
+        unknown_parts = set(route_parts) - allowed_parts
+        if unknown_parts:
+            raise ValueError(f"unknown connector route part(s): {', '.join(sorted(unknown_parts))}")
+        routing_parts = [part for part in route_parts if part in {"straight", "rightangle", "curved"}]
+        if len(routing_parts) > 1:
+            raise ValueError("connector route may specify only one routing behaviour")
+        return "point" in route_parts, routing_parts[0] if routing_parts else None
+
+    def __init__(self, xml: Element | None = None, page: vsdx.Page | None = None):
         if page is None:
             return
         if type(xml) is Element:  # create from xml
@@ -24,7 +37,7 @@ class Connect:
 
     @staticmethod
     def create(
-        page: vsdx.Page = None,
+        page: vsdx.Page | None = None,
         from_shape: Shape | None = None,
         to_shape: Shape | None = None,
         route: str = "dynamic",
@@ -41,7 +54,14 @@ class Connect:
         :returns: a new Connect object
         :rtype: Shape
         """
-        if from_shape and to_shape:  # create new connector shape and connect items between this and the two shapes
+        if page is None:
+            raise ValueError("Connect.create() requires a page")
+        if from_shape is None or to_shape is None:
+            raise ValueError("Connect.create() requires both from_shape and to_shape")
+        Connect._parse_route(route)
+        if (
+            from_shape is not None and to_shape is not None
+        ):  # create new connector shape and connect items between this and the two shapes
             # create new connect shape and get id
             media = vsdx.Media()
             media_shape = media.straight_connector
@@ -56,9 +76,9 @@ class Connect:
             new_master_id = None
             if not masters_rel_present:
                 # document has no masters at all: copy the media masters folder
-                for file_name, file in media._media_vsdx.zip_file_contents.items():
-                    if file_name.startswith(media._media_vsdx._masters_folder):
-                        new_file_name = file_name.replace(media._media_vsdx._masters_folder, page.vis._masters_folder)
+                for file_name, file in media.media.zip_file_contents.items():
+                    if file_name.startswith(media.media._masters_folder):
+                        new_file_name = file_name.replace(media.media._masters_folder, page.vis._masters_folder)
                         page.vis.zip_file_contents[new_file_name] = file
                 page.vis.load_master_pages()  # load copied master page files into VisioFile object
                 # document-level masters relationship
@@ -96,14 +116,18 @@ class Connect:
 
             # TitlesOfParts entry for the master name (app.xml 'Masters' count
             # is deliberately not written: real Visio packages omit it)
-            if connector_shape.shape_name not in page.vis._titles_of_parts_list():
-                page.vis._add_titles_of_parts_item(connector_shape.shape_name)
+            shape_name = connector_shape.shape_name
+            if shape_name and shape_name not in page.vis._titles_of_parts_list():
+                page.vis._add_titles_of_parts_item(shape_name)
 
             # copy style used by new connector shape
-            if not isinstance(page.vis._get_style_by_id(connector_shape.master_shape.line_style_id), Element):
+            master_shape = connector_shape.master_shape
+            line_style_id = master_shape.line_style_id if master_shape is not None else None
+            if line_style_id is not None and not isinstance(page.vis._get_style_by_id(line_style_id), Element):
                 # assume same if is ok, todo: use names for match and increment IDs
-                media_style = media._media_vsdx._get_style_by_id(connector_shape.master_shape.line_style_id)
-                page.vis._style_sheets().append(media_style)
+                media_style = media.media._get_style_by_id(line_style_id)
+                if media_style is not None:
+                    page.vis._style_sheets().append(media_style)
             media.close()
 
             # wire glue to the from/to shapes (Visio-faithful formulas, see
@@ -113,6 +137,7 @@ class Connect:
             # initial endpoints so the file renders sensibly even before Visio recalculates
             connector_shape.set_start_and_finish(from_shape.center_x_y, to_shape.center_x_y)
             return connector_shape
+        raise ValueError("Connect.create() requires both from_shape and to_shape")
 
     @staticmethod
     def _get_or_create_cell(shape: Shape, name: str, v: str | None = None, f: str | None = None):
@@ -146,8 +171,9 @@ class Connect:
         ConLineRouteExt=2).
         """
         conn_id = connector_shape.ID
+        point_glue, routing = Connect._parse_route(route)
 
-        if route == "point":
+        if point_glue:
             ends = (("Begin", "EndX", from_shape, from_cp), ("End", "BeginX", to_shape, to_cp))
             for prefix, _opposite_cell, shape, cp in ends:
                 cp_count = Connect._connection_point_count(shape)
@@ -200,11 +226,11 @@ class Connect:
                 f'ToSheet="{to_shape.ID}" ToCell="PinX" ToPart="3"/>'
             )
 
-        if route == "straight":
+        if routing == "straight":
             Connect._get_or_create_cell(connector_shape, "ShapeRouteStyle", v="16")
-        elif route == "rightangle":
+        elif routing == "rightangle":
             Connect._get_or_create_cell(connector_shape, "ShapeRouteStyle", v="1")
-        elif route == "curved":
+        elif routing == "curved":
             Connect._get_or_create_cell(connector_shape, "ShapeRouteStyle", v="17")
             Connect._get_or_create_cell(connector_shape, "ConLineRouteExt", v="2")
 
@@ -236,12 +262,14 @@ class Connect:
         current_from_cp = current_to_cp = 0
         for connect in page.connects:
             if connect.from_id == str(connector_shape.ID):
+                # note: deliberately not named to_shape - that is the parameter
+                connected_shape = page.find_shape_by_id(connect.to_id) if connect.to_id else None
                 if connect.from_rel == "BeginX":
-                    current_from = page.find_shape_by_id(connect.to_id)
+                    current_from = connected_shape
                     if connect.to_rel and connect.to_rel.startswith("Connections"):
                         current_from_cp = int(connect.to_rel.rsplit(".", 1)[1]) - 1
                 elif connect.from_rel == "EndX":
-                    current_to = page.find_shape_by_id(connect.to_id)
+                    current_to = connected_shape
                     if connect.to_rel and connect.to_rel.startswith("Connections"):
                         current_to_cp = int(connect.to_rel.rsplit(".", 1)[1]) - 1
         new_from = from_shape if from_shape is not None else current_from
@@ -249,7 +277,7 @@ class Connect:
         if new_from is None or new_to is None:
             raise ValueError("connector has no resolvable endpoints to keep")
 
-        page.remove_connect_records([connector_shape.ID])
+        page.remove_connect_records({str(connector_shape.ID)})
         Connect._apply_glue(
             connector_shape,
             new_from,
@@ -267,8 +295,8 @@ class Connect:
         return self.to_id
 
     @property
-    def shape(self) -> Shape:
-        return self.page.find_shape_by_id(self.shape_id)
+    def shape(self) -> Shape | None:
+        return self.page.find_shape_by_id(self.shape_id) if self.shape_id else None
 
     @property
     def connector_shape_id(self):
@@ -276,8 +304,8 @@ class Connect:
         return self.from_id
 
     @property
-    def connector_shape(self) -> Shape:
-        return self.page.find_shape_by_id(self.connector_shape_id)
+    def connector_shape(self) -> Shape | None:
+        return self.page.find_shape_by_id(self.connector_shape_id) if self.connector_shape_id else None
 
     def __repr__(self):
         return f"Connect: from={self.from_id} to={self.to_id} connector_id={self.connector_shape_id} shape_id={self.shape_id}"

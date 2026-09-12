@@ -1,17 +1,11 @@
-import wsgiref.headers
+
+import os
+from datetime import datetime
 
 import pytest
-from datetime import datetime
-import os
-
-from typing import List
 
 import vsdx
-from vsdx import Connect
-from vsdx import Page
-from vsdx import Shape
-from vsdx import VisioFile
-from vsdx import Cell
+from vsdx import Connect, Shape, VisioFile
 
 # code to get basedir of this test file in either linux/windows
 basedir = os.path.dirname(os.path.relpath(__file__))
@@ -172,7 +166,7 @@ def test_get_shape_with_text(filename: str, shape_id: str):
     with VisioFile(os.path.join(basedir, filename)) as vis:
         page = vis.get_page(0)  # type: Page
         shape = page.find_shape_by_text('{{date}}')  # type: Shape
-        assert shape.ID == shape_id
+        assert shape_id == shape.ID
 
 
 @pytest.mark.parametrize("filename", ["test1.vsdx", "test2.vsdx", "test3_house.vsdx"])
