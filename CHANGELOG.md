@@ -7,8 +7,8 @@ available at <https://github.com/dave-howard/vsdx>.
 
 ### Added
 
-- Dependabot keeps the SHA-pinned GitHub Actions and Python development
-  dependencies current, grouped into single weekly PRs.
+- Renovate keeps the digest-pinned GitHub Actions and Python dependencies
+  current, with grouped weekly update PRs and a uv lock maintenance pass.
 - The CI build job now smoke-tests the built wheel in a clean virtual
   environment (install, import, `pip show`, `py.typed` presence) before the
   distribution is uploaded as an artifact.
