@@ -21,14 +21,20 @@ shape_type_names = {  # a map from English language shape to a list of know name
 }
 
 
-def to_float(val: str | None) -> float | None:
-    """Convert a value to float; returns None for None input."""
+def to_float(val: str | None, cell: str | None = None) -> float | None:
+    """Convert a ShapeSheet value to float.
+
+    ``None`` input stays ``None``: an absent cell is distinct from a malformed
+    one. A malformed numeric value raises rather than masquerading as a real
+    zero coordinate; the message carries the cell name and raw value.
+    """
+    if val is None:
+        return None
     try:
-        if val is None:
-            return None
         return float(val)
-    except ValueError:
-        return 0.0
+    except ValueError as error:
+        label = f" for {cell}" if cell else ""
+        raise ValueError(f"malformed numeric ShapeSheet value{label}: {val!r}") from error
 
 
 def _coordinate_value(value: float | str | None) -> str:
@@ -458,7 +464,7 @@ class Shape:
     @property
     def line_weight(self) -> float | None:
         val = self.cell_value("LineWeight")
-        return to_float(val)
+        return to_float(val, cell="LineWeight")
 
     @line_weight.setter
     def line_weight(self, value: float | str):
@@ -510,7 +516,7 @@ class Shape:
 
     @property
     def x(self):
-        return to_float(self.cell_value("PinX"))
+        return to_float(self.cell_value("PinX"), cell="PinX")
 
     @x.setter
     def x(self, value: float | str) -> None:
@@ -518,7 +524,7 @@ class Shape:
 
     @property
     def y(self):
-        return to_float(self.cell_value("PinY"))
+        return to_float(self.cell_value("PinY"), cell="PinY")
 
     @y.setter
     def y(self, value: float | str) -> None:
@@ -526,7 +532,7 @@ class Shape:
 
     @property
     def loc_x(self):
-        return to_float(self.cell_value("LocPinX"))
+        return to_float(self.cell_value("LocPinX"), cell="LocPinX")
 
     @loc_x.setter
     def loc_x(self, value: float | str):
@@ -538,7 +544,7 @@ class Shape:
 
     @property
     def loc_y(self):
-        return to_float(self.cell_value("LocPinY"))
+        return to_float(self.cell_value("LocPinY"), cell="LocPinY")
 
     @loc_y.setter
     def loc_y(self, value: float | str):
@@ -550,7 +556,7 @@ class Shape:
 
     @property
     def line_to_x(self) -> float | None:
-        return to_float(self.cell_value("Geometry/LineTo/X"))
+        return to_float(self.cell_value("Geometry/LineTo/X"), cell="Geometry/LineTo/X")
 
     @line_to_x.setter
     def line_to_x(self, value: float | str) -> None:
@@ -558,7 +564,7 @@ class Shape:
 
     @property
     def line_to_y(self) -> float | None:
-        return to_float(self.cell_value("Geometry/LineTo/Y"))
+        return to_float(self.cell_value("Geometry/LineTo/Y"), cell="Geometry/LineTo/Y")
 
     @line_to_y.setter
     def line_to_y(self, value: float | str) -> None:
@@ -566,7 +572,7 @@ class Shape:
 
     @property
     def begin_x(self) -> float | None:
-        return to_float(self.cell_value("BeginX"))
+        return to_float(self.cell_value("BeginX"), cell="BeginX")
 
     @begin_x.setter
     def begin_x(self, value: float | str) -> None:
@@ -574,7 +580,7 @@ class Shape:
 
     @property
     def begin_y(self) -> float | None:
-        return to_float(self.cell_value("BeginY"))
+        return to_float(self.cell_value("BeginY"), cell="BeginY")
 
     @begin_y.setter
     def begin_y(self, value: float | str) -> None:
@@ -582,7 +588,7 @@ class Shape:
 
     @property
     def end_x(self) -> float | None:
-        return to_float(self.cell_value("EndX"))
+        return to_float(self.cell_value("EndX"), cell="EndX")
 
     @end_x.setter
     def end_x(self, value: float | str) -> None:
@@ -590,7 +596,7 @@ class Shape:
 
     @property
     def end_y(self) -> float | None:
-        return to_float(self.cell_value("EndY"))
+        return to_float(self.cell_value("EndY"), cell="EndY")
 
     @end_y.setter
     def end_y(self, value: float | str) -> None:
@@ -642,7 +648,7 @@ class Shape:
 
     @property
     def height(self) -> float | None:
-        return to_float(self.cell_value("Height"))
+        return to_float(self.cell_value("Height"), cell="Height")
 
     @height.setter
     def height(self, value: float | str):
@@ -650,7 +656,7 @@ class Shape:
 
     @property
     def width(self) -> float | None:
-        return to_float(self.cell_value("Width"))
+        return to_float(self.cell_value("Width"), cell="Width")
 
     @width.setter
     def width(self, value: float | str):
@@ -658,7 +664,7 @@ class Shape:
 
     @property
     def angle(self):
-        return to_float(self.cell_value("Angle"))
+        return to_float(self.cell_value("Angle"), cell="Angle")
 
     @angle.setter
     def angle(self, value: float | str) -> None:
