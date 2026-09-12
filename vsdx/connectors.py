@@ -298,7 +298,7 @@ class Connect:
         return connector_shape
 
     @property
-    def shape_id(self):
+    def shape_id(self) -> str | None:
         # ref to the shape where the connector terminates - convenience property
         return self.to_id
 
@@ -307,7 +307,7 @@ class Connect:
         return self.page.find_shape_by_id(self.shape_id) if self.shape_id else None
 
     @property
-    def connector_shape_id(self):
+    def connector_shape_id(self) -> str | None:
         # ref to the connector shape - convenience property
         return self.from_id
 

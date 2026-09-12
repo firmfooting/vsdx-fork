@@ -51,7 +51,7 @@ class Geometry:
                 return self.shape.x, self.shape.y
         return None
 
-    def move(self, x_delta: float, y_delta: float):
+    def move(self, x_delta: float, y_delta: float) -> None:
         # update any absolute references to co-ordinates
         for r in self.rows.values():  # type: GeometryRow
             logger.debug("r=%s %s", type(r), r)
@@ -240,23 +240,23 @@ class GeometryCell:
         self.xml.attrib["V"] = xml_value(value)
 
     @property
-    def formula(self):
+    def formula(self) -> str | None:
         return self.xml.attrib.get("F")
 
     @formula.setter
-    def formula(self, value: str):
+    def formula(self, value: str) -> None:
         self.xml.attrib["F"] = xml_value(value)
 
     @property
-    def name(self):
+    def name(self) -> str | None:
         return self.xml.attrib.get("N")
 
     @name.setter
-    def name(self, value: str):
+    def name(self, value: str) -> None:
         self.xml.attrib["N"] = xml_value(value)
 
     @property
-    def func(self):  # assume F stands for function, i.e. F="Width*0.5"
+    def func(self) -> str | None:  # assume F stands for function, i.e. F="Width*0.5"
         return self.xml.attrib.get("F")
 
     def __repr__(self):

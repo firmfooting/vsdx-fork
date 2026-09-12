@@ -74,7 +74,7 @@ class JinjaTemplatingMixin:
                 self.remove_page_by_index(p.index_num)
 
     @staticmethod
-    def jinja_render_shape(shape: Shape, context: dict[str, object], loop_shape_ids: list[str]):
+    def jinja_render_shape(shape: Shape, context: dict[str, object], loop_shape_ids: list[str]) -> None:
         prev_shape = None
         for s in shape.child_shapes:  # type: Shape
             # manage for loops in template
@@ -122,7 +122,7 @@ class JinjaTemplatingMixin:
         return jinja_source_out
 
     @staticmethod
-    def jinja_create_for_loop_if(shape: Shape, previous_shape: Shape | None):
+    def jinja_create_for_loop_if(shape: Shape, previous_shape: Shape | None) -> str | None:
         # update a Shapes tag where text looks like a jinja {% for xxxx %} loop
         # move text to start of Shapes tag and add {% endfor %} at end of tag
         text = shape.text

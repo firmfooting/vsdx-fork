@@ -19,45 +19,45 @@ def width_x_0(shape: Shape) -> int:
     return 0
 
 
-def middle_x(shape: Shape):
+def middle_x(shape: Shape) -> float:
     # (BeginX+EndX)/2
     return (_f(shape.begin_x) + _f(shape.end_x)) / 2
 
 
-def middle_y(shape: Shape):
+def middle_y(shape: Shape) -> float:
     # (BeginY+EndY)/2
     return (_f(shape.begin_y) + _f(shape.end_y)) / 2
 
 
-def center_x(shape: Shape):
+def center_x(shape: Shape) -> float:
     # Width*0.5
     return _f(shape.width) * 0.5
 
 
-def center_y(shape: Shape):
+def center_y(shape: Shape) -> float:
     # Height*0.5
     return _f(shape.height) * 0.5
 
 
-def diag_width(shape: Shape):
+def diag_width(shape: Shape) -> float:
     # SQRT((EndX-BeginX)^2+(EndY-BeginY)^2)
     width = _f(shape.end_x) - _f(shape.begin_x)
     height = _f(shape.end_y) - _f(shape.begin_y)
     return math.sqrt(width**2 + height**2)
 
 
-def angle(shape: Shape):
+def angle(shape: Shape) -> float:
     # ATAN2(EndY-BeginY,EndX-BeginX)
     w = _f(shape.end_x) - _f(shape.begin_x)
     h = _f(shape.end_y) - _f(shape.begin_y)
     return math.atan2(w, h)
 
 
-def width(shape: Shape):
+def width(shape: Shape) -> float:
     return _f(shape.end_x) - _f(shape.begin_x)
 
 
-def height(shape: Shape):
+def height(shape: Shape) -> float:
     return _f(shape.end_y) - _f(shape.begin_y)
 
 
@@ -80,7 +80,7 @@ func_map = {
 }
 
 
-def calc_value(shape: Shape, func_text: str):
+def calc_value(shape: Shape, func_text: str) -> float | str | None:
     f = func_map.get(func_text)
     if f:
         return f(shape=shape)

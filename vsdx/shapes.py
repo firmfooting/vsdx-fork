@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 import re
 import xml.etree.ElementTree as ET
+from typing import TYPE_CHECKING
 from xml.etree.ElementTree import Element
 
 import deprecation
@@ -12,6 +13,9 @@ from vsdx import namespace
 
 from .logging_support import get_logger
 from .xmlio import xml_value
+
+if TYPE_CHECKING:
+    from vsdx.connectors import Connect
 
 logger = get_logger(__name__)
 
@@ -68,19 +72,19 @@ class Cell:
         self.xml.attrib["V"] = xml_value(value)
 
     @property
-    def formula(self):
+    def formula(self) -> str | None:
         return self.xml.attrib.get("F")
 
     @formula.setter
-    def formula(self, value: str):
+    def formula(self, value: str) -> None:
         self.xml.attrib["F"] = xml_value(value)
 
     @property
-    def name(self):
+    def name(self) -> str | None:
         return self.xml.attrib.get("N")
 
     @property
-    def func(self):  # assume F stands for function, i.e. F="Width*0.5"
+    def func(self) -> str | None:  # assume F stands for function, i.e. F="Width*0.5"
         return self.xml.attrib.get("F")
 
     def __repr__(self):
@@ -141,7 +145,7 @@ class DataProperty:
                 self.sort_key = master_prop.sort_key
 
     @property
-    def value(self):
+    def value(self) -> str | None:
         """Get the value of the data property"""
         value_cell = self.xml.find(f'{namespace}Cell[@N="Value"]')
         value = None
@@ -272,7 +276,7 @@ class Shape:
         return self.page.is_master_page  # shape is a 'master' if it is contained by a master page
 
     @property
-    def universal_name(self):
+    def universal_name(self) -> str | None:
         name_univ = self.xml.attrib.get("NameU")  # default to shapes own unicode name
         if self.master_shape:
             page_sheet = self.master_shape.page._pagesheet_xml
@@ -366,7 +370,7 @@ class Shape:
         self._data_properties = properties  # cache for next call
         return properties
 
-    def shape_value(self, name: str):
+    def shape_value(self, name: str) -> str | None:
         return self.xml.attrib.get(name, None)
 
     def cell_value(self, name: str) -> str | None:
@@ -414,7 +418,7 @@ class Shape:
         else:
             self.xml.insert(0, cell_xml)
 
-    def set_cell_formula(self, name: str, value: str):
+    def set_cell_formula(self, name: str, value: str) -> None:
         cell = self.cells.get(name)
         if cell:  # only set value of existing item
             cell.formula = value
@@ -438,7 +442,7 @@ class Shape:
             self.xml.insert(0, cell_xml)
 
     @property
-    def line_style_id(self):
+    def line_style_id(self) -> str | None:
         return self.xml.attrib.get("LineStyle")
 
     @line_style_id.setter
@@ -446,7 +450,7 @@ class Shape:
         self.xml.attrib["LineStyle"] = str(value)
 
     @property
-    def fill_style_id(self):
+    def fill_style_id(self) -> str | None:
         return self.xml.attrib.get("FillStyle")
 
     @fill_style_id.setter
@@ -454,7 +458,7 @@ class Shape:
         self.xml.attrib["FillStyle"] = str(value)
 
     @property
-    def text_style_id(self):
+    def text_style_id(self) -> str | None:
         return self.xml.attrib.get("TextStyle")
 
     @text_style_id.setter
@@ -467,7 +471,7 @@ class Shape:
         return to_float(val, cell="LineWeight")
 
     @line_weight.setter
-    def line_weight(self, value: float | str):
+    def line_weight(self, value: float | str) -> float | None:
         self.set_cell_value("LineWeight", xml_value(value))
 
     @property
@@ -475,7 +479,7 @@ class Shape:
         return self.cell_value("LineColor")
 
     @line_color.setter
-    def line_color(self, value: str):
+    def line_color(self, value: str) -> None:
         self.set_cell_value("LineColor", xml_value(value))
 
     @property
@@ -483,7 +487,7 @@ class Shape:
         return self.cell_value("FillForegnd")
 
     @fill_color.setter
-    def fill_color(self, value: str):
+    def fill_color(self, value: str) -> None:
         self.set_cell_value("FillForegnd", xml_value(value))
 
     @property
@@ -503,7 +507,7 @@ class Shape:
             color_cells[0].attrib["V"] = str(value)
 
     @property
-    def end_arrow(self):
+    def end_arrow(self) -> str | None:
         return self.cell_value("EndArrow")
 
     @end_arrow.setter
@@ -515,7 +519,7 @@ class Shape:
         self.set_cell_value("EndArrow", xml_value(value))
 
     @property
-    def x(self):
+    def x(self) -> float | None:
         return to_float(self.cell_value("PinX"), cell="PinX")
 
     @x.setter
@@ -523,7 +527,7 @@ class Shape:
         self.set_cell_value("PinX", _coordinate_value(value))
 
     @property
-    def y(self):
+    def y(self) -> float | None:
         return to_float(self.cell_value("PinY"), cell="PinY")
 
     @y.setter
@@ -531,27 +535,27 @@ class Shape:
         self.set_cell_value("PinY", _coordinate_value(value))
 
     @property
-    def loc_x(self):
+    def loc_x(self) -> float | None:
         return to_float(self.cell_value("LocPinX"), cell="LocPinX")
 
     @loc_x.setter
-    def loc_x(self, value: float | str):
+    def loc_x(self, value: float | str) -> None:
         self.set_cell_value("LocPinX", _coordinate_value(value))
 
     @property
-    def loc_x_f(self):
+    def loc_x_f(self) -> str | None:
         return self.cell_formula("LocPinX")
 
     @property
-    def loc_y(self):
+    def loc_y(self) -> float | None:
         return to_float(self.cell_value("LocPinY"), cell="LocPinY")
 
     @loc_y.setter
-    def loc_y(self, value: float | str):
+    def loc_y(self, value: float | str) -> None:
         self.set_cell_value("LocPinY", _coordinate_value(value))
 
     @property
-    def loc_y_f(self):
+    def loc_y_f(self) -> str | None:
         return self.cell_formula("LocPinY")
 
     @property
@@ -651,7 +655,7 @@ class Shape:
         return to_float(self.cell_value("Height"), cell="Height")
 
     @height.setter
-    def height(self, value: float | str):
+    def height(self, value: float | str) -> float | None:
         self.set_cell_value("Height", _coordinate_value(value))
 
     @property
@@ -659,11 +663,11 @@ class Shape:
         return to_float(self.cell_value("Width"), cell="Width")
 
     @width.setter
-    def width(self, value: float | str):
+    def width(self, value: float | str) -> float | None:
         self.set_cell_value("Width", _coordinate_value(value))
 
     @property
-    def angle(self):
+    def angle(self) -> float | None:
         return to_float(self.cell_value("Angle"), cell="Angle")
 
     @angle.setter
@@ -768,7 +772,7 @@ class Shape:
                         c.value = v
 
     @property
-    def text_raw(self):
+    def text_raw(self) -> str:
         # return contents of Text element, or Master shape (if referenced), or empty string
         text_element = self.xml.find(f"{namespace}Text")
 
@@ -823,7 +827,7 @@ class Shape:
         return self.child_shapes
 
     @property
-    def child_shapes(self):
+    def child_shapes(self) -> list[Shape]:
         """Get child/sub shapes contained by a Shape
 
         :returns: list of Shape objects
@@ -844,7 +848,7 @@ class Shape:
         return shapes
 
     @property
-    def all_shapes(self):
+    def all_shapes(self) -> list[Shape]:
         # return all shapes within another shape, recursively
         return self._all_shapes()
 
@@ -956,7 +960,7 @@ class Shape:
         for s in self.child_shapes:
             s.apply_text_filter(context)
 
-    def find_replace(self, old: str, new: str):
+    def find_replace(self, old: str, new: str) -> None:
         # find and replace text in this shape and sub shapes
         text = self.text
         self.text = text.replace(old, new)
@@ -970,14 +974,14 @@ class Shape:
         if root is not None:
             root.remove(self.xml)
 
-    def append_shape(self, append_shape: Shape):
+    def append_shape(self, append_shape: Shape) -> None:
         # insert shape into shapes tag, and return updated shapes tag
         id_map = self.page.vis.increment_shape_ids(append_shape.xml, self.page)
         self.page.vis.update_ids(append_shape.xml, id_map)
         self.xml.append(append_shape.xml)
 
     @property
-    def connects(self):
+    def connects(self) -> list[Connect]:
         # get list of connect items linking shapes
         connects = list()
         for c in self.page.connects:

@@ -328,7 +328,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
             with contextlib.suppress(FileNotFoundError):
                 os.unlink(temporary)
 
-    def open_vsdx_file(self):
+    def open_vsdx_file(self) -> None:
         self._load_zip_file_contents_to_memory()
 
         # load each page file into an ElementTree object
@@ -346,7 +346,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
     def _masters_folder(self) -> str:
         return f"{self.directory}/visio/masters"
 
-    def load_pages(self):
+    def load_pages(self) -> None:
         rel_dir = f"{self.directory}/visio/pages/_rels/"
         page_dir = f"{self.directory}/visio/pages/"
 
@@ -464,10 +464,10 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         except IndexError:
             return None
 
-    def get_page_names(self):
+    def get_page_names(self) -> list[str]:
         return [p.name for p in self.pages]
 
-    def get_page_by_name(self, name: str):
+    def get_page_by_name(self, name: str) -> Page | None:
         """Get page from VisioFile with matching name
 
         :param name: The name of the required page
@@ -479,7 +479,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
             if p.name == name:
                 return p
 
-    def get_master_page_by_id(self, id: str):
+    def get_master_page_by_id(self, id: str) -> Page | None:
         """Get master page from VisioFile with matching ID.
 
         Referred by :attr:`Shape.master_ID`.
@@ -939,7 +939,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         return new_page
 
     # TODO: dead code - never used
-    def get_sub_shapes(self, shape: Element, nth: int = 1):
+    def get_sub_shapes(self, shape: Element, nth: int = 1) -> Element | None:
         for e in shape:
             if "Shapes" in e.tag:
                 nth -= 1
@@ -1150,10 +1150,10 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
                     cell.attrib["F"] = new_f
         return shape
 
-    def close_vsdx(self):
+    def close_vsdx(self) -> None:
         self.file_open = False
 
-    def save_vsdx(self, new_filename: str | None = None):
+    def save_vsdx(self, new_filename: str | None = None) -> None:
         """save the VisioFile object as new vsdx file
 
         :param new_filename: path to save vsdx file

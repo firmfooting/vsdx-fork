@@ -89,6 +89,10 @@ jobs:
         run: uv run --no-sync ruff format --check vsdx tests
       - name: pyrefly strict
         run: uv run --no-sync pyrefly check vsdx --min-severity warn --output-format min-text
+      - name: Public type-completeness gate
+        run: uv run --no-sync python tools/check_public_annotations.py
+      - name: Mypy consumer fixture
+        run: uv run --no-sync mypy --disallow-untyped-calls --follow-imports=silent --ignore-missing-imports tests/type_fixture.py
       - name: Sphinx documentation
         run: uv run --no-sync sphinx-build -W --keep-going -b html docs docs/_build/html
 

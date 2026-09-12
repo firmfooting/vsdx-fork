@@ -35,6 +35,11 @@ available at <https://github.com/dave-howard/vsdx>.
   left untouched on failure.
 - Pyrefly runs at the `strict` preset with zero diagnostics at warning severity
   and no in-source type suppression comments.
+- Every public definition (258 across the package) now carries an explicit
+  return annotation, so Mypy consumers get real types instead of `Any`. A
+  completeness gate (`tools/check_public_annotations.py`) and a Mypy consumer
+  fixture (`tests/type_fixture.py`, run with `--disallow-untyped-calls`) keep
+  the advertised typed contract checker-independent.
 - Typed contracts for shapes, pages, connectors, geometry, containers,
   templating, media and XML/package persistence.
 - Shared required-XML helpers that report the missing package part rather than

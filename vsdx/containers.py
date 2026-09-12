@@ -19,6 +19,8 @@ Model (verified against the capture):
 
 from __future__ import annotations
 
+import xml.etree.ElementTree as ET
+
 import vsdx
 
 from .shapes import Shape
@@ -34,7 +36,7 @@ ROW_SWIMLANE_GUID = "SwimlaneListGUID"
 _CFF_MACHINERY = ("CFF Container", "Swimlane List", "Phase List", "Separator")
 
 
-def get_user_row(shape: Shape, name: str):
+def get_user_row(shape: Shape, name: str) -> ET.Element | None:
     """Return the ``<Row N=name>`` element of the shape's User section, or None."""
     for section in shape.xml.findall(f"{vsdx.namespace}Section"):
         if section.attrib.get("N") == "User":
@@ -182,7 +184,7 @@ class Container:
         self.page.set_max_ids()
         return new_lane
 
-    def set_lane_label(self, lane: Shape, label: str):
+    def set_lane_label(self, lane: Shape, label: str) -> None:
         """Set a lane's heading label (visHeadingText row + heading text)."""
         set_user_row_value(lane, ROW_HEADING_TEXT, label)
         heading = self.lane_heading(lane)

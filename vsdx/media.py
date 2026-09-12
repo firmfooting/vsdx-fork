@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from .shapes import Shape
@@ -55,7 +58,7 @@ class Media:
         return shape
 
     @property
-    def rels_xml(self):
+    def rels_xml(self) -> ET.ElementTree[ET.Element] | None:
         return self.media.pages[0].rels_xml
 
     @property
