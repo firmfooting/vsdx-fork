@@ -23,6 +23,8 @@ def xml_to_file(xml: ET.ElementTree[ET.Element], filename: str, zip_file_content
 
 def xml_value(value: object) -> str:
     """Coerce a value before assigning it to an ElementTree attribute."""
+    if value is None:
+        raise TypeError("XML attribute value cannot be None")
     return str(value)
 
 

@@ -80,9 +80,9 @@ jobs:
       - name: Install lint and documentation tools
         run: uv sync --locked --no-default-groups --group lint --extra docs
       - name: ruff check
-        run: uv run --no-sync ruff check vsdx tests/test_imports.py
+        run: uv run --no-sync ruff check vsdx tests/test_imports.py tests/test_shape_coordinates.py
       - name: ruff format
-        run: uv run --no-sync ruff format --check vsdx tests/test_imports.py
+        run: uv run --no-sync ruff format --check vsdx tests/test_imports.py tests/test_shape_coordinates.py
       - name: pyrefly strict
         run: uv run --no-sync pyrefly check vsdx --min-severity warn --output-format min-text
       - name: Sphinx documentation

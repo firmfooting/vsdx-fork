@@ -56,11 +56,15 @@ class Geometry:
         for r in self.rows.values():  # type: GeometryRow
             logger.debug("r=%s %s", type(r), r)
             if str(r.row_type).lower() in ["moveto", "lineto"]:  # todo: include other absolute row types
-                r.x = r.x + x_delta if type(r.x) is float else None
-                r.y = r.y + y_delta if type(r.y) is float else None
+                x = r.x
+                y = r.y
+                if x is not None:
+                    r.x = x + x_delta
+                if y is not None:
+                    r.y = y + y_delta
                 logger.debug("r=%s %s after move %s, %s", type(r), r, x_delta, y_delta)
 
-    def set_move_to(self, x: float | None, y: float | None, move_to_index: int = 0) -> None:
+    def set_move_to(self, x: float, y: float, move_to_index: int = 0) -> None:
         move_tos = [r for r in self.rows.values() if str(r.row_type).lower() == "moveto"]
         # print(f"move_tos={move_tos}")
         if len(move_tos) > move_to_index:
@@ -72,7 +76,7 @@ class Geometry:
             move_to.y = y
             # print(f"move_to[{move_to_index}]={move_to.x},{move_to.y}")
 
-    def set_line_to(self, x: float | None, y: float | None, line_to_index: int = 0) -> None:
+    def set_line_to(self, x: float, y: float, line_to_index: int = 0) -> None:
         line_tos = [r for r in self.rows.values() if str(r.row_type).lower() == "lineto"]
         # print(f"line_tos={line_tos}")
         if len(line_tos) > line_to_index:
@@ -153,16 +157,17 @@ class GeometryRow:
         return float(x_cell.value) if x_cell and x_cell.value else None
 
     @x.setter
-    def x(self, value: float | str | None) -> None:
+    def x(self, value: float | str) -> None:
+        cell_value = xml_value(value)
         x_cell = self.cells.get("X")  # type: GeometryCell
         if not x_cell or (
             type(x_cell.parent) is GeometryRow
             and x_cell.parent.geometry.shape.master_page_ID != self.geometry.shape.master_page_ID
         ):
             # create new cell if none exists, or if existing cell is from master shape
-            x_cell = GeometryCell(parent=self, xml=None, name="X", value=value)
+            x_cell = GeometryCell(parent=self, xml=None, name="X", value=cell_value)
             logger.debug("x_cell=%s", x_cell)
-        x_cell.value = value
+        x_cell.value = cell_value
 
     @property
     def y(self) -> float | None:
@@ -170,16 +175,17 @@ class GeometryRow:
         return float(y_cell.value) if y_cell and y_cell.value else None
 
     @y.setter
-    def y(self, value: float | str | None) -> None:
+    def y(self, value: float | str) -> None:
+        cell_value = xml_value(value)
         y_cell = self.cells.get("Y")
         if not y_cell or (
             type(y_cell.parent) is GeometryRow
             and y_cell.parent.geometry.shape.master_page_ID != self.geometry.shape.master_page_ID
         ):
             # create new cell if none exists, or if existing cell is from master shape
-            y_cell = GeometryCell(parent=self, xml=None, name="Y", value=value)
+            y_cell = GeometryCell(parent=self, xml=None, name="Y", value=cell_value)
             logger.debug("y_cell=%s", y_cell)
-        y_cell.value = value
+        y_cell.value = cell_value
 
     @property
     def del_bool(self) -> str | None:
@@ -213,7 +219,7 @@ class GeometryCell:
         self.xml = xml if type(xml) is Element else self.create_cell_xml(name or "")
         if name:
             self.name = name
-        if value:
+        if value is not None:
             self.value = value
 
     def create_cell_xml(self, name: str) -> Element:
@@ -230,8 +236,8 @@ class GeometryCell:
         return self.xml.attrib.get("V")
 
     @value.setter
-    def value(self, value: float | str | None) -> None:
-        self.xml.attrib["V"] = str(value)
+    def value(self, value: float | str) -> None:
+        self.xml.attrib["V"] = xml_value(value)
 
     @property
     def formula(self):

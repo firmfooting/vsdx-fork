@@ -31,6 +31,13 @@ def to_float(val: str | None) -> float | None:
         return 0.0
 
 
+def _coordinate_value(value: float | str | None) -> str:
+    """Return a ShapeSheet coordinate value without serialising nulls."""
+    if value is None:
+        raise TypeError("coordinate value cannot be None")
+    return xml_value(value)
+
+
 master_re = re.compile(
     r"^(?P<prefix>(?:<ns0:[cp].+?\/>)*)"
     r"(?P<content>.*?)"
@@ -51,8 +58,8 @@ class Cell:
         return self.xml.attrib.get("V")
 
     @value.setter
-    def value(self, value: float | str | None) -> None:
-        self.xml.attrib["V"] = str(value)
+    def value(self, value: float | str) -> None:
+        self.xml.attrib["V"] = xml_value(value)
 
     @property
     def formula(self):
@@ -378,7 +385,7 @@ class Shape:
                 return master.cell_formula(name)
         return None
 
-    def set_cell_value(self, name: str, value: float | str | None) -> None:
+    def set_cell_value(self, name: str, value: float | str) -> None:
         cell = self.cells.get(name)
         if cell:  # only set value of existing item
             cell.value = value
@@ -455,7 +462,7 @@ class Shape:
 
     @line_weight.setter
     def line_weight(self, value: float | str):
-        self.set_cell_value("LineWeight", str(value))
+        self.set_cell_value("LineWeight", xml_value(value))
 
     @property
     def line_color(self) -> str | None:
@@ -499,23 +506,23 @@ class Shape:
             value = 13  # 13 is standard arrow
         if value is False:
             value = 0  # no arrow
-        self.set_cell_value("EndArrow", str(value))
+        self.set_cell_value("EndArrow", xml_value(value))
 
     @property
     def x(self):
         return to_float(self.cell_value("PinX"))
 
     @x.setter
-    def x(self, value: float | str | None) -> None:
-        self.set_cell_value("PinX", str(value))
+    def x(self, value: float | str) -> None:
+        self.set_cell_value("PinX", _coordinate_value(value))
 
     @property
     def y(self):
         return to_float(self.cell_value("PinY"))
 
     @y.setter
-    def y(self, value: float | str | None) -> None:
-        self.set_cell_value("PinY", str(value))
+    def y(self, value: float | str) -> None:
+        self.set_cell_value("PinY", _coordinate_value(value))
 
     @property
     def loc_x(self):
@@ -523,7 +530,7 @@ class Shape:
 
     @loc_x.setter
     def loc_x(self, value: float | str):
-        self.set_cell_value("LocPinX", str(value))
+        self.set_cell_value("LocPinX", _coordinate_value(value))
 
     @property
     def loc_x_f(self):
@@ -535,7 +542,7 @@ class Shape:
 
     @loc_y.setter
     def loc_y(self, value: float | str):
-        self.set_cell_value("LocPinY", str(value))
+        self.set_cell_value("LocPinY", _coordinate_value(value))
 
     @property
     def loc_y_f(self):
@@ -546,48 +553,48 @@ class Shape:
         return to_float(self.cell_value("Geometry/LineTo/X"))
 
     @line_to_x.setter
-    def line_to_x(self, value: float | str | None) -> None:
-        self.set_cell_value("Geometry/LineTo/X", str(value))
+    def line_to_x(self, value: float | str) -> None:
+        self.set_cell_value("Geometry/LineTo/X", _coordinate_value(value))
 
     @property
     def line_to_y(self) -> float | None:
         return to_float(self.cell_value("Geometry/LineTo/Y"))
 
     @line_to_y.setter
-    def line_to_y(self, value: float | str | None) -> None:
-        self.set_cell_value("Geometry/LineTo/Y", str(value))
+    def line_to_y(self, value: float | str) -> None:
+        self.set_cell_value("Geometry/LineTo/Y", _coordinate_value(value))
 
     @property
     def begin_x(self) -> float | None:
         return to_float(self.cell_value("BeginX"))
 
     @begin_x.setter
-    def begin_x(self, value: float | str | None) -> None:
-        self.set_cell_value("BeginX", str(value))
+    def begin_x(self, value: float | str) -> None:
+        self.set_cell_value("BeginX", _coordinate_value(value))
 
     @property
     def begin_y(self) -> float | None:
         return to_float(self.cell_value("BeginY"))
 
     @begin_y.setter
-    def begin_y(self, value: float | str | None) -> None:
-        self.set_cell_value("BeginY", str(value))
+    def begin_y(self, value: float | str) -> None:
+        self.set_cell_value("BeginY", _coordinate_value(value))
 
     @property
     def end_x(self) -> float | None:
         return to_float(self.cell_value("EndX"))
 
     @end_x.setter
-    def end_x(self, value: float | str | None) -> None:
-        self.set_cell_value("EndX", str(value))
+    def end_x(self, value: float | str) -> None:
+        self.set_cell_value("EndX", _coordinate_value(value))
 
     @property
     def end_y(self) -> float | None:
         return to_float(self.cell_value("EndY"))
 
     @end_y.setter
-    def end_y(self, value: float | str | None) -> None:
-        self.set_cell_value("EndY", str(value))
+    def end_y(self, value: float | str) -> None:
+        self.set_cell_value("EndY", _coordinate_value(value))
 
     def move(self, x_delta: float, y_delta: float) -> None:
         if self.geometry:
@@ -639,7 +646,7 @@ class Shape:
 
     @height.setter
     def height(self, value: float | str):
-        self.set_cell_value("Height", str(value))
+        self.set_cell_value("Height", _coordinate_value(value))
 
     @property
     def width(self) -> float | None:
@@ -647,15 +654,15 @@ class Shape:
 
     @width.setter
     def width(self, value: float | str):
-        self.set_cell_value("Width", str(value))
+        self.set_cell_value("Width", _coordinate_value(value))
 
     @property
     def angle(self):
         return to_float(self.cell_value("Angle"))
 
     @angle.setter
-    def angle(self, value: float | str | None) -> None:
-        self.set_cell_value("Angle", str(value))
+    def angle(self, value: float | str) -> None:
+        self.set_cell_value("Angle", _coordinate_value(value))
 
     @property
     def bounds(self) -> tuple[float, float, float, float]:
@@ -698,34 +705,41 @@ class Shape:
     ) -> None:
         # set start and finish of a simple line or connector
         if self.begin_x is not None:  # only apply changes to lines and connector shapes
-            self.x, self.y = start
+            start_x, start_y = start
+            finish_x, finish_y = finish
+            if start_x is None or start_y is None or finish_x is None or finish_y is None:
+                raise ValueError("connector start and finish coordinates cannot be None")
+            self.x, self.y = start_x, start_y
             # lines/connectors are defined in different ways
             # Check whether shape is a connector based on name in known languages
             is_connector = self.universal_name == "Dynamic connector"
 
-            self.begin_x, self.begin_y = start
-            self.end_x, self.end_y = finish
-            self.width = (self.end_x or 0.0) - (self.begin_x or 0.0)
-            if is_connector:
-                self.height = (self.end_y or 0.0) - (self.begin_y or 0.0)  # connector has a height, where a Line does not
-            else:
-                self.height = 0.0  # line height is always zero
-            self.x, self.y = start
+            self.begin_x, self.begin_y = start_x, start_y
+            self.end_x, self.end_y = finish_x, finish_y
+            width = finish_x - start_x
+            height = finish_y - start_y if is_connector else 0.0
+            self.width = width
+            self.height = height
+            self.x, self.y = start_x, start_y
             if self.geometry is not None:
                 self.geometry.set_move_to(0.0, 0.0)
-                self.geometry.set_line_to(self.width, self.height)
+                self.geometry.set_line_to(width, height)
             txt_pin_x = self.cells.get("TxtPinX")
             txt_pin_y = self.cells.get("TxtPinY")
             if txt_pin_x and txt_pin_y:
                 if is_connector:
-                    txt_pin_x.value = (self.width or 0.0) / 2
-                    txt_pin_y.value = (self.height or 0.0) / 2
+                    text_x = width / 2
+                    text_y = height / 2
                 else:
-                    txt_pin_x.value, txt_pin_y.value = self.center_x_y
-                self.set_cell_value(name="Control/TextPosition/X", value=txt_pin_x.value)
-                self.set_cell_value(name="Control/TextPosition/Y", value=txt_pin_y.value)
-                self.set_cell_value(name="Control/TextPosition/XDyn", value=txt_pin_x.value)
-                self.set_cell_value(name="Control/TextPosition/YDyn", value=txt_pin_y.value)
+                    text_x, text_y = self.center_x_y
+                    if text_x is None or text_y is None:
+                        raise ValueError("shape text coordinates cannot be None")
+                txt_pin_x.value = text_x
+                txt_pin_y.value = text_y
+                self.set_cell_value(name="Control/TextPosition/X", value=text_x)
+                self.set_cell_value(name="Control/TextPosition/Y", value=text_y)
+                self.set_cell_value(name="Control/TextPosition/XDyn", value=text_x)
+                self.set_cell_value(name="Control/TextPosition/YDyn", value=text_y)
                 # print(cp1.cells.keys())
             cells: list[Cell | vsdx.GeometryCell] = list(self.cells.values())
             if self.geometry is not None:
