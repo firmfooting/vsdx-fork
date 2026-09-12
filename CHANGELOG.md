@@ -7,6 +7,12 @@ available at <https://github.com/dave-howard/vsdx>.
 
 ### Added
 
+- Dependabot keeps the SHA-pinned GitHub Actions and Python development
+  dependencies current, grouped into single weekly PRs.
+- The CI build job now smoke-tests the built wheel in a clean virtual
+  environment (install, import, `pip show`, `py.typed` presence) before the
+  distribution is uploaded as an artifact.
+- CI cancels superseded runs on the same ref via a concurrency group.
 - Pyrefly runs at the `strict` preset with zero diagnostics at warning severity
   and no in-source type suppression comments.
 - Typed contracts for shapes, pages, connectors, geometry, containers,
@@ -54,6 +60,17 @@ available at <https://github.com/dave-howard/vsdx>.
 
 ### Changed
 
+- The lint job checks and formats the whole `tests` tree rather than two
+  selected test modules; the remaining test files have been brought into
+  compliance (semantic fixes: `raise AssertionError` instead of `assert
+  False`, `zip(..., strict=True)`, `enumerate()` accumulation, exception
+  chaining).
+- zizmor is pinned to the committed uv lock (`uv run zizmor`) instead of
+  resolving ad hoc via `uvx` at run time.
+- Package keywords no longer carry inherited upstream terms.
+- CONTRIBUTING.md and SECURITY.md now describe this fork (uv workflow,
+  gate list, private vulnerability reporting on this repository) rather than
+  inheriting the upstream project's text.
 - CI now uses a committed uv lock for normal test, lint and build jobs. The
   minimum-dependency job regenerates that lock with
   `--resolution lowest-direct` and runs the full test suite on the oldest and
