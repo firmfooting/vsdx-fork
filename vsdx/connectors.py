@@ -67,6 +67,9 @@ class Connect:
         if from_shape is None or to_shape is None:
             raise ValueError("Connect.create() requires both from_shape and to_shape")
         Connect._parse_route(route)
+        # validate everything _apply_glue can reject BEFORE provisioning
+        # masters, copying shapes or appending records (issue #9 atomicity)
+        Connect._validate_point_glue(from_shape, to_shape, route, from_cp, to_cp)
         if (
             from_shape is not None and to_shape is not None
         ):  # create new connector shape and connect items between this and the two shapes
@@ -162,6 +165,26 @@ class Connect:
             if section.attrib.get("N") == "Connection":
                 return len(section.findall(f"{vsdx.namespace}Row"))
         return 0
+
+    @staticmethod
+    def _validate_point_glue(from_shape: Shape, to_shape: Shape, route: str, from_cp: int, to_cp: int) -> None:
+        """Validate route and point-glue indices before any package mutation.
+
+        Issue #9: Connect.create() provisioned masters and appended the
+        connector, and retarget() removed existing records, before
+        _apply_glue() rejected invalid indices — a caught ValueError left the
+        package half-changed. Everything _apply_glue can reject is checked
+        here so callers can fail before their first mutation.
+        """
+        point_glue, _routing = Connect._parse_route(route)
+        if not point_glue:
+            return
+        for shape, cp in ((from_shape, from_cp), (to_shape, to_cp)):
+            cp_count = Connect._connection_point_count(shape)
+            if cp < 0 or cp >= cp_count:
+                raise ValueError(
+                    f"Shape ID {shape.ID} has {cp_count} connection point(s); cannot glue to connection point index {cp}"
+                )
 
     @staticmethod
     def _apply_glue(
@@ -285,6 +308,15 @@ class Connect:
         if new_from is None or new_to is None:
             raise ValueError("connector has no resolvable endpoints to keep")
 
+        # validate everything _apply_glue can reject BEFORE removing the
+        # existing records (issue #9 atomicity)
+        Connect._validate_point_glue(
+            new_from,
+            new_to,
+            route,
+            from_cp if from_shape is not None else current_from_cp,
+            to_cp if to_shape is not None else current_to_cp,
+        )
         page.remove_connect_records({str(connector_shape.ID)})
         Connect._apply_glue(
             connector_shape,
