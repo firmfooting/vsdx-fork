@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import contextlib
+import copy
 import io
 import os
+import posixpath
 import shutil
+import sys
 import tempfile
 import xml.dom.minidom as minidom  # minidom used for prettyprint
 import xml.etree.ElementTree as ET
@@ -11,7 +14,10 @@ import zipfile
 from types import TracebackType
 from xml.etree.ElementTree import Element
 
-from typing_extensions import override
+if sys.version_info >= (3, 12):
+    from typing import override
+else:
+    from typing_extensions import override
 
 import vsdx
 
@@ -39,6 +45,17 @@ ET.register_namespace("vt", vt_namespace[1:-1])
 ET.register_namespace("r", r_namespace[1:-1])
 ET.register_namespace("", document_rels_namespace[1:-1])
 ET.register_namespace("", cont_types_namespace[1:-1])
+
+
+def _page_relationship_path(rel_dir: str, page_path: str) -> str:
+    """Return an in-memory OPC relationship key; OPC member names use `/`."""
+    filename = posixpath.basename(page_path.replace("\\", "/"))
+    return posixpath.join(rel_dir, f"{filename}.rels")
+
+
+def _normalise_page_path(path: str) -> str:
+    """Normalise mixed platform separators without changing OPC case."""
+    return posixpath.normpath(path.replace("\\", "/"))
 
 
 class VisioFileNotOpen(BaseException):
@@ -210,8 +227,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
                 require_xml_tree(page_path, self.zip_file_contents, "page part"), page_path, page_name, page_id, rel_id, self
             )
             # look for visio/pages/_rels/page3.xml.rels
-            base_page_file_name = page_path.split(os.path.sep)[-1]
-            page_rels_path = rel_dir + base_page_file_name + ".rels"
+            page_rels_path = _page_relationship_path(rel_dir, page_path)
 
             if page_rels_path in self.zip_file_contents:
                 new_page.rels_xml_filename = page_rels_path
@@ -629,6 +645,11 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
 
         # Update VisioFile object
         new_page = Page(new_page_xml, new_page_path, page_name, "", "", self)
+        if source_page is not None and source_page.rels_xml is not None:
+            source_rels_root = require_element(source_page.rels_xml.getroot(), "source page relationships root")
+            new_page.rels_xml = ET.ElementTree(copy.deepcopy(source_rels_root))
+            rel_dir = f"{self.directory}/visio/pages/_rels/"
+            new_page.rels_xml_filename = _page_relationship_path(rel_dir, new_page_path)
 
         self.pages.insert(index, new_page)  # insert new page at defined index
 
@@ -753,14 +774,6 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
             index=index,
             source_page=page,
         )
-
-        # copy pageX.xml.rels if it exists
-        # from testing, this does not actually seem to make a difference
-        _, original_filename = os.path.split(page.filename)
-        page_xml_rels_file = f"{self.directory}/visio/pages/_rels/{original_filename}.rels"  # TODO: better concatenation
-        new_page_xml_rels_file = f"{self.directory}/visio/pages/_rels/{new_page_filename}.rels"  # TODO: better concatenation
-        with contextlib.suppress(FileNotFoundError):
-            shutil.copy(page_xml_rels_file, new_page_xml_rels_file)
 
         return new_page
 
@@ -924,12 +937,12 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         return new_shape
 
     def insert_shape(self, shape: Element, shapes: Element, page: Page, page_path: str) -> Element:
-        # insert shape into shapes tag, and return updated shapes tag
-        for page_obj in self.pages:
-            if page_obj.filename == page_path:
-                break
+        # Keep page_path for the current API, but never let it select a different
+        # page from the typed Page argument that owns ID allocation.
+        if _normalise_page_path(page.filename) != _normalise_page_path(page_path):
+            raise ValueError(f"page_path {page_path!r} does not match page filename {page.filename!r}")
 
-        id_map = self.increment_shape_ids(shape, page_obj)
+        id_map = self.increment_shape_ids(shape, page)
         self.update_ids(shape, id_map)
         shapes.append(shape)
         return shapes
@@ -977,9 +990,6 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         return shape
 
     def close_vsdx(self):
-        with contextlib.suppress(FileNotFoundError):
-            # Remove extracted folder if there
-            shutil.rmtree(self.directory)
         self.file_open = False
 
     def save_vsdx(self, new_filename: str | None = None):
@@ -991,6 +1001,9 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         """
         if not self.file_open:
             raise VisioFileNotOpen("Unable to save a file after being closed or outside of 'with' block.")
+        if not self.zip_file_contents:
+            raise ValueError("cannot save an empty package")
+
         # write pages.xml.rels
         xml_to_file(
             self._part_tree(self.pages_xml_rels, "pages.xml.rels"),
@@ -1034,28 +1047,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
             self.zip_file_contents,
         )
 
-        # wrap up files into zip and rename to vsdx
-        base_filename = self.filename[:-5]  # remove ".vsdx" from end
-        if new_filename is not None and new_filename.find(os.sep) > 0:
-            directory = new_filename[0 : new_filename.rfind(os.sep)]
-            if directory and not os.path.exists(directory):
-                os.mkdir(directory)
-
-        # write content from zip_file_contents to zip file directory
-        if self.zip_file_contents:
-            if not new_filename:
-                # in-place save: write the zip under its final name directly
-                self._save_zip_file_contents_to_disk(self.filename)
-                return
-            if not new_filename.endswith(".vsdx"):
-                new_filename += ".vsdx"
-            self._save_zip_file_contents_to_disk(new_filename)
-            return
-
-        shutil.make_archive(base_filename, "zip", self.directory)
-        if not new_filename:
-            shutil.move(base_filename + ".zip", self.filename)
-        else:
-            if new_filename[-5:] != ".vsdx":
-                new_filename += ".vsdx"
-            shutil.move(base_filename + ".zip", new_filename)
+        target = self.filename if new_filename is None else new_filename
+        if new_filename is not None and not target.lower().endswith(".vsdx"):
+            target += ".vsdx"
+        self._save_zip_file_contents_to_disk(target)

@@ -33,6 +33,40 @@ def test_save_vsdx_appends_vsdx_suffix(vsdx_copy):
         assert len(vis.pages) == 1
 
 
+def test_save_vsdx_accepts_uppercase_suffix(vsdx_copy):
+    src = vsdx_copy(BASE)
+    destination = Path(src).with_name("UPPER.VSDX")
+
+    with VisioFile(src) as vis:
+        vis.save_vsdx(str(destination))
+
+    assert destination.exists()
+    assert not Path(f"{destination}.vsdx").exists()
+
+
+def test_save_vsdx_creates_nested_parent_directories(vsdx_copy, tmp_path):
+    src = vsdx_copy(BASE)
+    destination = tmp_path / "nested" / "deeper" / "saved.vsdx"
+
+    with VisioFile(src) as vis:
+        vis.save_vsdx(str(destination))
+
+    with VisioFile(str(destination)) as vis:
+        assert len(vis.pages) == 1
+
+
+def test_save_vsdx_refuses_an_empty_package(vsdx_copy, tmp_path):
+    src = vsdx_copy(BASE)
+    destination = tmp_path / "empty.vsdx"
+
+    with VisioFile(src) as vis:
+        vis.zip_file_contents.clear()
+        with pytest.raises(ValueError, match="empty package"):
+            vis.save_vsdx(str(destination))
+
+    assert not destination.exists()
+
+
 def test_save_vsdx_twice_preserves_unmodified_parts(vsdx_copy):
     src = vsdx_copy(BASE)
     with zipfile.ZipFile(src) as archive:

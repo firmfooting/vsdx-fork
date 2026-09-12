@@ -38,12 +38,23 @@ available at <https://github.com/dave-howard/vsdx>.
 - Connector re-anchoring handles missing endpoint IDs explicitly and avoids
   parameter shadowing.
 - Media documents can be closed and opened again through one lazy access path.
+- Page relationship parts use OPC separators on every operating system and are
+  copied into the in-memory package when a page is copied.
+- Bundled media paths no longer depend on the process working directory.
+- Closing an in-memory document no longer deletes an unrelated same-stem
+  directory beside the source file.
+- Saving rejects an empty package instead of writing a corrupt archive and
+  recognises an uppercase `.VSDX` suffix without appending another extension.
 
 ### Changed
 
 - The pyrefly preset is now `strict` rather than `basic`.
-- `typing-extensions` is a runtime dependency for `@override` on Python 3.10
-  and 3.11.
+- Runtime dependency floors now match the supported API and security baseline:
+  `Jinja2>=3.1.6`, `deprecation>=2.1.0`, and `typing-extensions>=4.4.0` on
+  Python 3.10–3.11. Python 3.12 and later use `typing.override` directly.
+- `insert_shape()` now validates that `page_path` identifies the supplied
+  `Page` instead of silently allocating IDs against whichever page was visited
+  last.
 - GitHub's default branch is now `main`; CI and documentation references follow
   the renamed branch.
 - Documentation now names the distribution `vsdxkit`, retains `import vsdx`,
