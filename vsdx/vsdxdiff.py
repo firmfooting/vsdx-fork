@@ -1,6 +1,5 @@
 import difflib
-import os
-import shutil
+import hashlib
 import zipfile
 
 from .logging_support import get_logger
@@ -88,33 +87,26 @@ class VisioFileDiff:
 
     @staticmethod
     def extract_file_data(file_path: str) -> dict[str, list[str]]:
-        # open a vsdx file (or other zip based format) and return a dictionary of file contents by file_path
-        directory = os.path.abspath(file_path)[:-5]  # -5 to remove '.vsdx' from filename
-        with zipfile.ZipFile(file_path, "r") as zip_ref:
-            extracted_file_paths = zip_ref.namelist()
-            zip_ref.extractall(directory)
+        """Read archive members in-memory; nothing is written beside the source.
 
-        # process data in directory
+        A same-stem directory next to the .vsdx is user data, not scratch
+        space, so no extraction or recursive delete happens (issue #8).
+        Undecodable members become a ``binary sha256:<digest>`` line so two
+        different binaries compare as changed instead of collapsing into the
+        same placeholder.
+        """
         file_contents: dict[str, list[str]] = {}
-        for extracted_file_path in extracted_file_paths:
-            # print(f"Opening {os.path.join(directory, extracted_file_path)}")
-            full_path = os.path.join(directory, extracted_file_path)
-            try:
-                if not os.path.isdir(full_path):
-                    with open(full_path) as f:
-                        file_data = f.readlines()
-                    file_contents[extracted_file_path] = file_data
-                    # print(f"Opened and read contents of {extracted_file_path}")
-            except UnicodeDecodeError:
-                file_contents[extracted_file_path] = ["Unable to decode file."]
-                logger.warning("Failed to read file: %s", full_path)
-            except PermissionError:
-                file_contents[extracted_file_path] = ["Unable to open file."]
-                logger.warning("Failed to open file (PermissionError): %s", full_path)
-        try:
-            # Remove extracted folder
-            shutil.rmtree(directory)
-        except (FileNotFoundError, PermissionError) as e:
-            logger.warning("Error shutil.rmtree(%s) %s", directory, e)
-
+        with zipfile.ZipFile(file_path, "r") as zip_ref:
+            for member in zip_ref.infolist():
+                if member.filename.endswith("/"):
+                    continue
+                payload = zip_ref.read(member.filename)
+                try:
+                    text = payload.decode("utf-8")
+                except UnicodeDecodeError:
+                    digest = hashlib.sha256(payload).hexdigest()
+                    file_contents[member.filename] = [f"binary sha256:{digest}"]
+                    logger.debug("member %s is not decodable text; compared by digest", member.filename)
+                    continue
+                file_contents[member.filename] = text.splitlines(keepends=True)
         return file_contents

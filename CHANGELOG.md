@@ -129,6 +129,10 @@ available at <https://github.com/dave-howard/vsdx>.
   last.
 - GitHub's default branch is now `main`; CI and documentation references follow
   the renamed branch.
+- `VisioFileDiff` reads archive members in-memory: it no longer extracts
+  beside the source files (which could delete a user's same-stem directory)
+  and undecodable members compare by SHA-256 digest, so two different binary
+  members are reported as changed instead of collapsing into one placeholder.
 - Documentation now names the distribution `vsdxkit`, retains `import vsdx`,
   and requires Python 3.10 or later.
 
