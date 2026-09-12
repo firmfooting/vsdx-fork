@@ -166,7 +166,7 @@ def _read_bounded(reader: _MemberReader, declared_size: int, name: str, limits: 
     return b"".join(chunks)
 
 
-class VisioFileNotOpen(BaseException):
+class VisioFileNotOpen(Exception):
     """Error class to report when a VisioFile is attempted to be saved when no longer open"""
 
     pass

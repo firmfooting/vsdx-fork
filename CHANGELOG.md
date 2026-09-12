@@ -14,6 +14,9 @@ available at <https://github.com/dave-howard/vsdx>.
   untrusted documents; trusted callers relax them via `limits=` or `limits_path=`.
 - Renovate keeps the digest-pinned GitHub Actions and Python dependencies
   current, with grouped weekly update PRs and a uv lock maintenance pass.
+- `VisioFileNotOpen` is now a genuine `Exception` subclass and is exported from
+  the package root, so save-after-close is caught by normal `except Exception`
+  handling and can be caught specifically.
 - The CI build job now smoke-tests the built wheel in a clean virtual
   environment (install, import, `pip show`, `py.typed` presence) before the
   distribution is uploaded as an artifact.
