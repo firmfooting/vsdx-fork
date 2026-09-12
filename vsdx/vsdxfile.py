@@ -4,6 +4,7 @@ import contextlib
 import copy
 import io
 import json
+import math
 import os
 import posixpath
 import shutil
@@ -91,10 +92,13 @@ class PackageLimits:
     max_ratio: float = 200.0
 
     def __post_init__(self) -> None:
-        if self.max_members < 1:
-            raise ValueError("max_members must be at least 1")
-        for field_name in ("max_member_size", "max_total_uncompressed"):
-            if getattr(self, field_name) < 1:
+        if not math.isfinite(float(self.max_ratio)):
+            raise ValueError("max_ratio must be a finite number")
+        for field_name in ("max_members", "max_member_size", "max_total_uncompressed"):
+            value = getattr(self, field_name)
+            if not math.isfinite(float(value)):
+                raise ValueError(f"{field_name} must be a finite number")
+            if value < 1:
                 raise ValueError(f"{field_name} must be at least 1")
         if self.max_ratio < 1.0:
             raise ValueError("max_ratio must be at least 1.0")
@@ -266,13 +270,13 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         limits = self.limits
         with zipfile.ZipFile(self.filename, "r") as zip_ref:
             infos = zip_ref.infolist()
-            _check_member_names([info.filename for info in infos])
-            file_infos = [info for info in infos if info.filename and not info.filename.endswith("/")]
-            if len(file_infos) > limits.max_members:
+            if len(infos) > limits.max_members:
                 raise PackageLimitError(
                     "member_count",
-                    f"package has {len(file_infos)} members; max_members={limits.max_members}",
+                    f"package has {len(infos)} entries (including directories); max_members={limits.max_members}",
                 )
+            _check_member_names([info.filename for info in infos])
+            file_infos = [info for info in infos if info.filename and not info.filename.endswith("/")]
             declared_total = 0
             for info in file_infos:
                 declared_total += info.file_size
