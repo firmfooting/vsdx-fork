@@ -29,6 +29,9 @@ available at <https://github.com/dave-howard/vsdx>.
   re-anchoring, swimlanes, search and Jinja templates.
 - Sphinx warning-as-error validation and a dedicated zizmor GitHub Actions audit
   in the CI gates.
+- Malformed numeric ShapeSheet values raise `ValueError` naming the cell and raw
+  value instead of silently reading as `0.0`; absent cells still read as `None`,
+  keeping absent, malformed and genuine zero distinct.
 - Package-wide import coverage now runs as a normal test across the supported
   Python and operating-system matrix.
 
