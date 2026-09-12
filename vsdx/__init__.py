@@ -35,7 +35,7 @@ from .logging_support import attach_debug_stream_handler, get_logger  # noqa: E4
 from .media import Media  # noqa: E402
 from .pages import Page, PagePosition  # noqa: E402
 from .shapes import Cell, DataProperty, Shape  # noqa: E402
-from .vsdxfile import VisioFile  # noqa: E402
+from .vsdxfile import PackageLimitError, PackageLimits, VisioFile  # noqa: E402
 
 __all__ = [
     "Cell",
@@ -46,6 +46,8 @@ __all__ = [
     "GeometryCell",
     "GeometryRow",
     "Media",
+    "PackageLimitError",
+    "PackageLimits",
     "Page",
     "PagePosition",
     "Shape",

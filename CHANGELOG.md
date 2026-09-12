@@ -7,6 +7,11 @@ available at <https://github.com/dave-howard/vsdx>.
 
 ### Added
 
+- Package expansion limits: `VisioFile` inspects archive metadata before reading
+  members and enforces caps on member count, per-member and total uncompressed
+  size and compression ratio, and rejects duplicate and path-unsafe member names,
+  raising `vsdx.PackageLimitError` with a stable `reason`. Defaults suit
+  untrusted documents; trusted callers relax them via `limits=` or `limits_path=`.
 - Renovate keeps the digest-pinned GitHub Actions and Python dependencies
   current, with grouped weekly update PRs and a uv lock maintenance pass.
 - The CI build job now smoke-tests the built wheel in a clean virtual
