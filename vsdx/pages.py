@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from enum import IntEnum
 from typing import TYPE_CHECKING
 
@@ -506,7 +507,7 @@ class Page:
                 shapes_el.remove(shape.xml)
                 break
 
-    def remove_connect_records(self, connector_ids: set[str]) -> None:
+    def remove_connect_records(self, connector_ids: Iterable[str | int]) -> None:
         """Remove all Connect records whose FromSheet is one of connector_ids.
 
         Single record-removal path, shared by the delete cascade and
@@ -515,6 +516,7 @@ class Page:
         connects_el = self.xml.find(f".//{namespace}Connects")
         if connects_el is None:
             return
+        normalised_ids = {str(connector_id) for connector_id in connector_ids}
         for connect in list(connects_el):
-            if connect.attrib.get("FromSheet") in connector_ids:
+            if connect.attrib.get("FromSheet") in normalised_ids:
                 connects_el.remove(connect)

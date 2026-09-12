@@ -23,6 +23,8 @@ available at <https://github.com/dave-howard/vsdx>.
 
 ### Fixed
 
+- Connector record removal normalises integer IDs before matching XML attributes,
+  preserving the existing public-call behaviour.
 - `save_vsdx()` now writes through a same-directory temporary archive and
   atomically replaces the target; failed in-place writes retain the original.
 - Repeated in-place or named saves preserve untouched ZIP members and keep
