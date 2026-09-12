@@ -189,7 +189,7 @@ def test_master_import_on_own_masters_document(tmp_path):
         assert len(master_parts) >= 2  # original + imported
     with VisioFile(src) as vis2:
         page = vis2.pages[0]
-        assert page.find_shape_by_text("") is not None or True  # reopen is valid
+        assert page.find_shape_by_text("") is not None  # reopen is valid
         connectors = [s for s in page.all_shapes if "BeginX" in s.cells]
         assert len(connectors) == 1
 
