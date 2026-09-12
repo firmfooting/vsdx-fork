@@ -13,13 +13,20 @@ import subprocess
 import sys
 from pathlib import Path
 
-USES_RE = re.compile(r"^\s*-?\s*uses:\s*(?P<action>[\w.-]+/[\w.-]+)@(?P<sha>[0-9a-f]{40})(?:\s+#\s*(?P<comment>\S+))?\s*$")
+USES_RE = re.compile(
+    r"^\s*-?\s*uses:\s*(?P<action>[\w.-]+/[\w.-]+(?:/[\w.-]+)*)@(?P<sha>[0-9a-f]{40})(?:\s+#\s*(?P<comment>\S+))?\s*$"
+)
 
 
 def resolved_tag_map(action: str) -> dict[str, set[str]]:
-    """Map commit sha -> set of tag names for a GitHub action repository."""
+    """Map commit sha -> set of tag names for a GitHub action repository.
+
+    ``action`` may include a subpath (``owner/repo/sub``); the git remote is
+    always the first two path components.
+    """
+    repo = "/".join(action.split("/")[:2])
     output = subprocess.run(
-        ["git", "ls-remote", f"https://github.com/{action}", "refs/tags/*"],
+        ["git", "ls-remote", f"https://github.com/{repo}", "refs/tags/*"],
         capture_output=True,
         text=True,
         check=True,
@@ -45,7 +52,7 @@ def resolved_tag_map(action: str) -> dict[str, set[str]]:
 def main() -> int:
     workflow_dir = Path(".github/workflows")
     pins: list[tuple[Path, str, str, str | None]] = []
-    for workflow in sorted(workflow_dir.glob("*.yml")):
+    for workflow in sorted({*workflow_dir.glob("*.yml"), *workflow_dir.glob("*.yaml")}):
         for line_number, line in enumerate(workflow.read_text(encoding="utf-8").splitlines(), start=1):
             match = USES_RE.match(line)
             if match:
