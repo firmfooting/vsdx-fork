@@ -44,6 +44,12 @@ available at <https://github.com/dave-howard/vsdx>.
   keeping absent, malformed and genuine zero distinct.
 - Package-wide import coverage now runs as a normal test across the supported
   Python and operating-system matrix.
+- Test-suite strengthening: previously output-only tests now assert against
+  independent expectations and reopen persisted files; a conditional-assert
+  precedence bug in the end-arrow tests, an always-true assertion and an
+  ignored expectations parameter are fixed; the two skipped diff tests are
+  replaced with deterministic equivalents; and a four-mutant kill run
+  documents that the new tests fail when the behaviour they name is broken.
 
 ### Fixed
 

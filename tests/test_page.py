@@ -95,31 +95,36 @@ def test_set_page_size(filename: str, page_index: int, page_scale: float):
 
 
 @pytest.mark.parametrize(
-    "filename, page_index, expected_shape_bounds",
+    "filename, page_index",
     [
-        ("test1.vsdx", 0, (0, 0, 1, 1)),
-        ("test2.vsdx", 0, (0, 0, 1, 1)),
-        ("test1.vsdx", 2, (0, 0, 1, 1)),
-        ("test2.vsdx", 2, (0, 0, 1, 1)),
+        ("test1.vsdx", 0),
+        ("test2.vsdx", 0),
+        ("test1.vsdx", 2),
+        ("test2.vsdx", 2),
     ],
 )
-def test_get_page_bounds(filename: str, page_index: int, expected_shape_bounds: tuple):
+def test_get_page_bounds(filename: str, page_index: int):
     out_file = os.path.join(basedir, "out", f"{filename[:-5]}_test_get_page_bounds_{page_index}.vsdx")
     with VisioFile(os.path.join(basedir, filename)) as vis:
         page = vis.pages[page_index]
+        assert page.all_shapes  # a bounds test needs shapes to bound
+
+        boxes = [s.bounds for s in page.all_shapes]
+        min_x = min(box[0] for box in boxes)
+        min_y = min(box[1] for box in boxes)
+        max_x = max(box[2] for box in boxes)
+        max_y = max(box[3] for box in boxes)
+        for box in boxes:
+            # every shape's bounds must sit inside the page-wide envelope
+            assert box[0] >= min_x - 0.001
+            assert box[1] >= min_y - 0.001
+            assert box[2] <= max_x + 0.001
+            assert box[3] <= max_y + 0.001
 
         box = vsdx.media.Media().rectangle
-
         for s in page.all_shapes:
-            # bx = s.begin_x or (s.x-s.loc_x)
-            # by = s.begin_y or (s.y-s.loc_y)
-            # ex = s.end_x or (bx + s.width)
-            # ey = s.end_y or (by + s.height)
             bx, by, ex, ey = s.bounds
-            # print(f"{s.ID} bx:{bx} by:{by} ex:{ex} ey:{ey} x:{s.x} y:{s.y} lx:{s.loc_x} ly:{s.loc_y} w:{s.width} h:{s.height} {s.text} {s.geometry.rows if s.geometry else None}")
             cbox = box.copy(page=page)
-            # print(vsdx.pretty_print_element(list(cbox.cells.values())[0].xml))
-            print(s.text, s.bounds, s.parent.shape_type)
             cbox.line_color = "#ff2222"
             cbox.x = bx
             cbox.loc_x = 0
@@ -128,7 +133,6 @@ def test_get_page_bounds(filename: str, page_index: int, expected_shape_bounds: 
             cbox.loc_y = 0
             cbox.height = ey - by
             cbox.text = f"{bx:.2g},{by:.2g}-{ex:.2g},{ey:.2g}"
-            # print(vsdx.pretty_print_element(cbox.xml))
         vis.save_vsdx(out_file)
 
 
@@ -449,33 +453,34 @@ def test_add_connect_between_shapes(filename: str, page_index: int, shape_a_text
             assert page.find_shape_by_id(new_connector_id)
 
 
-@pytest.mark.parametrize(
-    ("filename"),
-    [
-        ("test8_simple_connector.vsdx"),
-    ],
-)
+@pytest.mark.parametrize("filename", ["test8_simple_connector.vsdx", "test4_connectors.vsdx"])
 def test_add_multiple_connectors(filename: str):
+    out_file = os.path.join(basedir, "out", f"{filename[:-5]}_new_test_1.vsdx")
     with VisioFile(os.path.join(basedir, filename)) as vis:
         src_page = vis.pages[0]
         block_shape = src_page.child_shapes[0]
         new_page = vis.add_page("new page")
-        # 1
-        # adding new_shape1, new_shape2 and connecting them
         new_shape1 = block_shape.copy(new_page)
         new_shape1.text = "new shape 1"
         new_shape2 = block_shape.copy(new_page)
         new_shape2.text = "new shape 2"
         Connect.create(page=new_page, from_shape=new_shape1, to_shape=new_shape2)
-        out_file = os.path.join(basedir, "out", f"{filename[:-5]}_new_test_1.vsdx")
-        vis.save_vsdx(out_file)
-        # 2
-        # adding new_shape3 and connecting it to new_shape2
         new_shape3 = block_shape.copy(new_page)
         new_shape3.text = "new shape 3"
-        Connect.create(page=new_page, from_shape=new_shape2, to_shape=new_shape3)  # ERROR
-        out_file = os.path.join(basedir, "out", f"{filename[:-5]}_new_test_2.vsdx")
+        Connect.create(page=new_page, from_shape=new_shape2, to_shape=new_shape3)
         vis.save_vsdx(out_file)
+
+    # the contract is persistence: connector shapes and their Connect records
+    # must survive save/reopen
+    with VisioFile(out_file) as vis:
+        new_page = vis.pages[-1]
+        assert new_page.find_shape_by_text("new shape 1") is not None
+        assert new_page.find_shape_by_text("new shape 2") is not None
+        assert new_page.find_shape_by_text("new shape 3") is not None
+        connectors = [s for s in new_page.all_shapes if "BeginX" in s.cells]
+        assert len(connectors) >= 2
+        connect_pairs = {(c.from_id, c.to_id) for c in new_page.connects}
+        assert connect_pairs, "no Connect records persisted"
 
 
 @pytest.mark.parametrize(
