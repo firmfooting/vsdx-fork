@@ -66,3 +66,14 @@ fields identify the source and target cells, such as ``BeginX``, ``EndX``,
 .. autoclass:: vsdx.containers.Container
    :members: add_shape_to_lane, add_swimlane, container_shape, find, lane_band, lane_heading, lane_of, lanes, members, set_lane_label, swimlane_list
    :undoc-members:
+
+Package limits
+--------------
+
+.. autoclass:: vsdx.vsdxfile.PackageLimits
+   :members:
+   :undoc-members:
+
+.. autoclass:: vsdx.vsdxfile.PackageLimitError
+   :members:
+   :undoc-members:

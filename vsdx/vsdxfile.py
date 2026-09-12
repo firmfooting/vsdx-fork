@@ -3,6 +3,8 @@ from __future__ import annotations
 import contextlib
 import copy
 import io
+import json
+import math
 import os
 import posixpath
 import shutil
@@ -11,7 +13,9 @@ import tempfile
 import xml.dom.minidom as minidom  # minidom used for prettyprint
 import xml.etree.ElementTree as ET
 import zipfile
+from dataclasses import dataclass
 from types import TracebackType
+from typing import Protocol
 from xml.etree.ElementTree import Element
 
 if sys.version_info >= (3, 12):
@@ -58,6 +62,110 @@ def _normalise_page_path(path: str) -> str:
     return posixpath.normpath(path.replace("\\", "/"))
 
 
+class PackageLimitError(OSError):
+    """A package violated a load limit: size, member count, ratio, names or duplicates.
+
+    ``reason`` is a stable slug (``member_size``, ``total_size``,
+    ``member_count``, ``compression_ratio``, ``duplicate_member``,
+    ``member_name``, ``limits_file``) so callers can branch by failure mode.
+    """
+
+    def __init__(self, reason: str, message: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
+@dataclass(frozen=True)
+class PackageLimits:
+    """Conservative caps applied while loading a package from disk.
+
+    The defaults suit documents from unknown sources: a hostile or accidental
+    archive is rejected before it can exhaust process memory. Trusted callers
+    holding their own documents can relax the caps via
+    ``VisioFile(filename, limits=PackageLimits(...))`` or a JSON file passed
+    as ``limits_path`` with the same keys.
+    """
+
+    max_members: int = 4096
+    max_member_size: int = 512 * 1024 * 1024
+    max_total_uncompressed: int = 2 * 1024 * 1024 * 1024
+    max_ratio: float = 200.0
+
+    def __post_init__(self) -> None:
+        if not math.isfinite(float(self.max_ratio)):
+            raise ValueError("max_ratio must be a finite number")
+        for field_name in ("max_members", "max_member_size", "max_total_uncompressed"):
+            value = getattr(self, field_name)
+            if not math.isfinite(float(value)):
+                raise ValueError(f"{field_name} must be a finite number")
+            if value < 1:
+                raise ValueError(f"{field_name} must be at least 1")
+        if self.max_ratio < 1.0:
+            raise ValueError("max_ratio must be at least 1.0")
+
+    @classmethod
+    def from_json_file(cls, path: str) -> PackageLimits:
+        """Load limits from a JSON object; unusable files are PackageLimitError, not surprises."""
+        try:
+            with open(path, encoding="utf-8") as handle:
+                payload = json.load(handle)
+        except (OSError, ValueError) as error:  # ValueError covers json.JSONDecodeError
+            raise PackageLimitError("limits_file", f"unable to read limits file {path}: {error}") from error
+        if not isinstance(payload, dict):
+            raise PackageLimitError("limits_file", f"limits file {path} must contain a JSON object")
+        known = {"max_members", "max_member_size", "max_total_uncompressed", "max_ratio"}
+        unknown = sorted(set(payload) - known)
+        if unknown:
+            raise PackageLimitError("limits_file", f"unknown limit keys in {path}: {', '.join(unknown)}")
+        try:
+            return cls(**payload)
+        except (TypeError, ValueError) as error:
+            raise PackageLimitError("limits_file", f"invalid limits in {path}: {error}") from error
+
+
+def _check_member_names(names: list[str]) -> None:
+    """Reject duplicate and path-like unsafe member names before any state is materialised."""
+    seen: set[str] = set()
+    for name in names:
+        if name in seen:
+            raise PackageLimitError("duplicate_member", f"duplicate package member: {name}")
+        seen.add(name)
+        unsafe = (
+            name.startswith("/")
+            or name.startswith("\\")
+            or ":" in name
+            or "\\" in name
+            or any(part == ".." for part in name.split("/"))
+        )
+        if unsafe:
+            raise PackageLimitError("member_name", f"unsafe package member name: {name!r}")
+
+
+class _MemberReader(Protocol):
+    """Minimal structural type for a readable archive member stream."""
+
+    def read(self, size: int = -1, /) -> bytes: ...
+
+
+def _read_bounded(reader: _MemberReader, declared_size: int, name: str, limits: PackageLimits) -> bytes:
+    """Stream a member through a byte counter so over-delivery cannot bypass the per-member cap."""
+    chunks: list[bytes] = []
+    received = 0
+    while True:
+        chunk = reader.read(1024 * 1024)
+        if not chunk:
+            break
+        received += len(chunk)
+        if received > limits.max_member_size:
+            raise PackageLimitError(
+                "member_size",
+                f"package member '{name}' delivered {received} bytes (declared {declared_size});"
+                f" max_member_size={limits.max_member_size}",
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 class VisioFileNotOpen(BaseException):
     """Error class to report when a VisioFile is attempted to be saved when no longer open"""
 
@@ -75,13 +183,23 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
     :type master_pages: list of :class:`Page`
     """
 
-    def __init__(self, filename: str, debug: bool = False) -> None:
+    def __init__(
+        self,
+        filename: str,
+        debug: bool = False,
+        limits: PackageLimits | None = None,
+        limits_path: str | None = None,
+    ) -> None:
         """VisioFile constructor
 
         :param filename: the vsdx file to load and create the VisioFile object from
         :type filename: str
         :param debug: enable/disable debugging
         :type debug: bool, default to False
+        :param limits: package expansion caps; the defaults suit untrusted documents
+        :type limits: PackageLimits, optional
+        :param limits_path: JSON file with the same keys as the PackageLimits fields
+        :type limits_path: str, optional
         """
         self.debug = debug
         self.filename = filename
@@ -91,6 +209,10 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         file_type = self.filename.split(".")[-1]  # last text after dot
         if not file_type.lower() == "vsdx" and not file_type.lower() == "vsdm":
             raise TypeError(f"Invalid File Type:{file_type}")
+
+        if limits_path is not None:
+            limits = PackageLimits.from_json_file(limits_path)
+        self.limits = limits if limits is not None else PackageLimits()
 
         self.directory = os.path.abspath(filename)[:-5]
         self.pages_xml: ET.ElementTree[ET.Element] | None = None
@@ -138,14 +260,49 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
             return minidom.parseString(ET.tostring(require_element(xml.getroot(), "element"))).toprettyxml()
         return minidom.parseString(ET.tostring(xml)).toprettyxml()
 
-    def _load_zip_file_contents_to_memory(self):
-        """Open zip file and create a dictionary of file like objects by file_path"""
+    def _load_zip_file_contents_to_memory(self) -> None:
+        """Open zip file and create a dictionary of file like objects by file_path.
+
+        ZipInfo metadata is checked against ``self.limits`` before any member
+        body is read; reads then stream through a byte counter so the bound
+        holds even if the archive's metadata disagrees with its contents.
+        """
+        limits = self.limits
         with zipfile.ZipFile(self.filename, "r") as zip_ref:
-            for file_path in zip_ref.namelist():
-                path = f"{self.directory}/{file_path}"
-                if not path.endswith("/"):  # ignore directories
-                    content = zip_ref.read(file_path)
-                    self.zip_file_contents[path] = io.BytesIO(content)
+            infos = zip_ref.infolist()
+            if len(infos) > limits.max_members:
+                raise PackageLimitError(
+                    "member_count",
+                    f"package has {len(infos)} entries (including directories); max_members={limits.max_members}",
+                )
+            _check_member_names([info.filename for info in infos])
+            file_infos = [info for info in infos if info.filename and not info.filename.endswith("/")]
+            declared_total = 0
+            for info in file_infos:
+                declared_total += info.file_size
+                if info.file_size > limits.max_member_size:
+                    raise PackageLimitError(
+                        "member_size",
+                        f"package member '{info.filename}' declares {info.file_size} bytes;"
+                        f" max_member_size={limits.max_member_size}",
+                    )
+                ratio = info.file_size / max(info.compress_size, 1)
+                if ratio > limits.max_ratio:
+                    raise PackageLimitError(
+                        "compression_ratio",
+                        f"package member '{info.filename}' has compression ratio {ratio:.1f}; max_ratio={limits.max_ratio}",
+                    )
+            if declared_total > limits.max_total_uncompressed:
+                raise PackageLimitError(
+                    "total_size",
+                    f"package declares {declared_total} uncompressed bytes;"
+                    f" max_total_uncompressed={limits.max_total_uncompressed}",
+                )
+            for info in file_infos:
+                path = f"{self.directory}/{info.filename}"
+                with zip_ref.open(info, "r") as member_reader:
+                    content = _read_bounded(member_reader, info.file_size, info.filename, limits)
+                self.zip_file_contents[path] = io.BytesIO(content)
 
     def _save_zip_file_contents_to_disk(self, save_filename: str) -> None:
         """Atomically save the in-memory package to a .vsdx file."""
