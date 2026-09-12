@@ -11,6 +11,19 @@ from .shapes import Shape
 class Connect:
     """Connect class to represent a connection between two `Shape` objects"""
 
+    @staticmethod
+    def _parse_route(route: str) -> tuple[bool, str | None]:
+        """Return point-glue and routing choices after validating route tokens."""
+        route_parts: list[str] = route.split("|") if route else []
+        allowed_parts = {"dynamic", "point", "straight", "rightangle", "curved"}
+        unknown_parts = set(route_parts) - allowed_parts
+        if unknown_parts:
+            raise ValueError(f"unknown connector route part(s): {', '.join(sorted(unknown_parts))}")
+        routing_parts = [part for part in route_parts if part in {"straight", "rightangle", "curved"}]
+        if len(routing_parts) > 1:
+            raise ValueError("connector route may specify only one routing behaviour")
+        return "point" in route_parts, routing_parts[0] if routing_parts else None
+
     def __init__(self, xml: Element | None = None, page: vsdx.Page | None = None):
         if page is None:
             return
@@ -45,6 +58,7 @@ class Connect:
             raise ValueError("Connect.create() requires a page")
         if from_shape is None or to_shape is None:
             raise ValueError("Connect.create() requires both from_shape and to_shape")
+        Connect._parse_route(route)
         if (
             from_shape is not None and to_shape is not None
         ):  # create new connector shape and connect items between this and the two shapes
@@ -157,8 +171,9 @@ class Connect:
         ConLineRouteExt=2).
         """
         conn_id = connector_shape.ID
+        point_glue, routing = Connect._parse_route(route)
 
-        if route == "point":
+        if point_glue:
             ends = (("Begin", "EndX", from_shape, from_cp), ("End", "BeginX", to_shape, to_cp))
             for prefix, _opposite_cell, shape, cp in ends:
                 cp_count = Connect._connection_point_count(shape)
@@ -211,11 +226,11 @@ class Connect:
                 f'ToSheet="{to_shape.ID}" ToCell="PinX" ToPart="3"/>'
             )
 
-        if route == "straight":
+        if routing == "straight":
             Connect._get_or_create_cell(connector_shape, "ShapeRouteStyle", v="16")
-        elif route == "rightangle":
+        elif routing == "rightangle":
             Connect._get_or_create_cell(connector_shape, "ShapeRouteStyle", v="1")
-        elif route == "curved":
+        elif routing == "curved":
             Connect._get_or_create_cell(connector_shape, "ShapeRouteStyle", v="17")
             Connect._get_or_create_cell(connector_shape, "ConLineRouteExt", v="2")
 

@@ -36,19 +36,26 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://github.com/shauneccles/vsdx"
-Documentation = "https://vsdx.readthedocs.io/en/latest/"
-"Upstream" = "https://github.com/dave-howard/vsdx"
+Documentation = "https://github.com/shauneccles/vsdx/tree/main/docs"
+Issues = "https://github.com/shauneccles/vsdx/issues"
+Upstream = "https://github.com/dave-howard/vsdx"
 
 [project.optional-dependencies]
 dev = [
+    "build==1.6.1",
     "pytest",
     "pytest-cov",
-    "ruff",
-    "pyrefly",
+    "ruff==0.16.7",
+    "pyrefly==1.3.0",
+]
+docs = [
+    "sphinx==8.1.3",
+    "sphinx-rtd-theme==3.1.0",
 ]
 
 [tool.setuptools]
 packages = ["vsdx"]
+include-package-data = false
 
 [tool.setuptools.package-data]
 vsdx = ["media/*.vsdx", "py.typed"]
@@ -80,6 +87,5 @@ ignore = ["E501"]
 
 [tool.pyrefly]
 project-includes = ["vsdx"]
-# basic preset: the ratchet start point. Tighten per-error-config as
-# annotations improve (see roadmap).
+# strict preset: the package type-checks clean at this level, so keep it there
 preset = "strict"

@@ -105,9 +105,9 @@ class Page:
     @name.setter
     def name(self, value: str) -> None:
         page = self._page_xml()
-        page.attrib["Name"] = str(value)
-        page.attrib["NameU"] = str(value)
-        self._name = str(value)
+        page.attrib["Name"] = value
+        page.attrib["NameU"] = value
+        self._name = value
 
     def _index(self) -> int:
         """Zero-based index of this page in its VisioFile (required)."""
@@ -132,9 +132,8 @@ class Page:
 
     @background.setter
     def background(self, value: bool) -> None:
-        bool_value = bool(value)
-        self._page_xml().attrib["Background"] = "1" if bool_value else "0"
-        self._background = bool_value
+        self._page_xml().attrib["Background"] = "1" if value else "0"
+        self._background = value
 
     def _get_page_name(self) -> str:
         return self.name
@@ -431,11 +430,8 @@ class Page:
         :returns: the new connector Shape
         :rtype: Shape
         """
-        parts: list[str] = route.split("|") if route else []
-        glue = "point" if "point" in parts else "dynamic"
-        behaviour = next((p for p in parts if p in ("straight", "rightangle", "curved")), None)
         return vsdx.Connect.create(
-            page=self, from_shape=from_shape, to_shape=to_shape, route=behaviour or glue, from_cp=from_cp, to_cp=to_cp
+            page=self, from_shape=from_shape, to_shape=to_shape, route=route, from_cp=from_cp, to_cp=to_cp
         )
 
     def get_container(self) -> vsdx.Container | None:
@@ -443,7 +439,7 @@ class Page:
         return vsdx.Container.find(self)
 
     def add_swimlane(self, label: str | None = None) -> Shape:
-        """Add a swimlane to this page's CFF Container (clones the last lane).
+        """Add a swimlane to this page's CFF Container by cloning its top lane.
 
         :returns: the new lane Shape
         """
@@ -452,8 +448,8 @@ class Page:
             raise ValueError("page has no CFF Container")
         return container.add_swimlane(label)
 
-    def add_shape_to_lane(self, shape: Shape, lane: Shape):
-        """Move a shape into a swimlane lane (membership is tree containment)."""
+    def add_shape_to_lane(self, shape: Shape, lane: Shape) -> None:
+        """Move a shape so its centre lies within a CFF swimlane's geometric band."""
         container = self.get_container()
         if container is None:
             raise ValueError("page has no CFF Container")
@@ -516,10 +512,9 @@ class Page:
         Single record-removal path, shared by the delete cascade and
         connector retargeting.
         """
-        ids = {str(i) for i in connector_ids}
         connects_el = self.xml.find(f".//{namespace}Connects")
         if connects_el is None:
             return
         for connect in list(connects_el):
-            if connect.attrib.get("FromSheet") in ids:
+            if connect.attrib.get("FromSheet") in connector_ids:
                 connects_el.remove(connect)

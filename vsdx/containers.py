@@ -199,11 +199,11 @@ class Container:
                 return child
         return None
 
-    def add_shape_to_lane(self, shape: Shape, lane: Shape):
+    def add_shape_to_lane(self, shape: Shape, lane: Shape) -> None:
         """Assign a shape to a lane by geometry: set the shape's PinY to the
         lane's centre, keeping its PinX. Mirrors Visio's own behaviour when a
         shape is dragged into a lane; membership stays geometric.
         """
         if self.lane_of(shape) is lane:
             return
-        shape.get_or_create_cell("PinY", v=str(lane.y))
+        shape.get_or_create_cell("PinY", v=str(lane.y or 0.0))

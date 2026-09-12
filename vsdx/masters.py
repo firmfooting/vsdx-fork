@@ -10,6 +10,7 @@ from __future__ import annotations
 import copy as copy_module
 import io
 import xml.etree.ElementTree as ET
+from typing import TYPE_CHECKING, cast
 from xml.etree.ElementTree import Element
 
 from vsdx import document_rels_namespace, namespace, r_namespace
@@ -18,6 +19,9 @@ from .logging_support import get_logger
 from .pages import Page
 from .shapes import Shape
 from .xmlio import file_to_xml, xml_to_file
+
+if TYPE_CHECKING:
+    from .vsdxfile import VisioFile
 
 logger = get_logger(__name__)
 
@@ -70,7 +74,7 @@ class MastersImportMixin:
         # already present in this document, by name?
         existing = self.master_index.get(master_name)
         if existing is not None:
-            return str(existing.page_id)
+            return existing.page_id
 
         source_master_page = src_vis.get_master_page_by_id(master_ref)
         if source_master_page is None or source_master_page.filename not in src_vis.zip_file_contents:
@@ -94,7 +98,7 @@ class MastersImportMixin:
 
         # 3. append the Master element with a fresh logical ID
         assert self.masters_xml is not None  # bootstrap above guarantees it
-        numeric_ids = [int(m.attrib["ID"]) for m in self.masters_xml if str(m.attrib.get("ID", "")).isdigit()]
+        numeric_ids = [int(m.attrib["ID"]) for m in self.masters_xml if m.attrib.get("ID", "").isdigit()]
         new_id = max(numeric_ids, default=1) + 1
         if new_id < 2:
             new_id = 2
@@ -163,7 +167,7 @@ class MastersImportMixin:
             master_name,
             str(new_id),
             new_rel_id,
-            self,  # type: ignore[arg-type]
+            cast("VisioFile", self),
         )
         new_master_page.master_unique_id = new_master_element.attrib.get("UniqueID")
         new_master_page.master_base_id = new_master_element.attrib.get("BaseID")

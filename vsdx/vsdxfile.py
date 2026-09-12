@@ -4,6 +4,7 @@ import contextlib
 import io
 import os
 import shutil
+import tempfile
 import xml.dom.minidom as minidom  # minidom used for prettyprint
 import xml.etree.ElementTree as ET
 import zipfile
@@ -129,16 +130,29 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
                     content = zip_ref.read(file_path)
                     self.zip_file_contents[path] = io.BytesIO(content)
 
-    def _save_zip_file_contents_to_disk(self, save_filename: str):
-        """Save the zip_file_contents to disk"""
-        with zipfile.ZipFile(save_filename, "w") as zipf:
-            for file_path, file_content in self.zip_file_contents.items():  # type: tuple(str, io.BytesIO)
-                file_path_in_zip: str = file_path.replace(self.directory + "/", "")
-
-                if file_path_in_zip.endswith(".xml") or file_path_in_zip.endswith(".rels"):
-                    zipf.writestr(file_path_in_zip, file_content.read().decode("utf-8"))
-                else:
-                    zipf.writestr(file_path_in_zip, file_content.read())
+    def _save_zip_file_contents_to_disk(self, save_filename: str) -> None:
+        """Atomically save the in-memory package to a .vsdx file."""
+        target = os.path.abspath(save_filename)
+        target_dir = os.path.dirname(target)
+        os.makedirs(target_dir, exist_ok=True)
+        fd, temporary = tempfile.mkstemp(prefix=f".{os.path.basename(target)}.", suffix=".tmp", dir=target_dir)
+        os.close(fd)
+        try:
+            with zipfile.ZipFile(temporary, "w") as zipf:
+                for file_path, file_content in self.zip_file_contents.items():
+                    file_path_in_zip = file_path.replace(self.directory + "/", "")
+                    content = file_content.getvalue()
+                    if file_path_in_zip.endswith(".xml") or file_path_in_zip.endswith(".rels"):
+                        zipf.writestr(file_path_in_zip, content.decode("utf-8"))
+                    else:
+                        zipf.writestr(file_path_in_zip, content)
+            mode_source = target if os.path.exists(target) else os.path.abspath(self.filename)
+            if os.path.exists(mode_source):
+                shutil.copymode(mode_source, temporary)
+            os.replace(temporary, target)
+        finally:
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(temporary)
 
     def open_vsdx_file(self):
         self._load_zip_file_contents_to_memory()
@@ -797,9 +811,9 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
     # context = {'customer_name':'codypy.com', 'year':2020 }
     # example shape text "For {{customer_name}}  (c){{year}}" -> "For codypy.com (c)2020"
     @staticmethod
-    def apply_text_context(shapes: Element, context: dict[str, str]) -> None:
+    def apply_text_context(shapes: Element, context: dict[str, object]) -> None:
 
-        def _replace_shape_text(shape: Element, context: dict[str, str]) -> None:
+        def _replace_shape_text(shape: Element, context: dict[str, object]) -> None:
             text = VisioFile.get_shape_text(shape)
 
             for key in context:
@@ -949,7 +963,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
             # look for Cell elements
             cells = e.findall(f"{namespace}Cell[@F]")
             for cell in cells:
-                f = str(cell.attrib["F"])
+                f = cell.attrib["F"]
                 if f.startswith("Sheet."):
                     # update sheet refs with new ids; refs outside the cloned
                     # subtree (e.g. to the Swimlane List) are not in id_map
@@ -1036,7 +1050,6 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
             if not new_filename.endswith(".vsdx"):
                 new_filename += ".vsdx"
             self._save_zip_file_contents_to_disk(new_filename)
-            self.directory = os.path.abspath(new_filename)[:-5]
             return
 
         shutil.make_archive(base_filename, "zip", self.directory)

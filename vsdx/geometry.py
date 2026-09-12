@@ -6,6 +6,7 @@ from xml.etree.ElementTree import Element
 import vsdx
 
 from .logging_support import get_logger
+from .xmlio import xml_value
 
 logger = get_logger(__name__)
 
@@ -238,7 +239,7 @@ class GeometryCell:
 
     @formula.setter
     def formula(self, value: str):
-        self.xml.attrib["F"] = str(value)
+        self.xml.attrib["F"] = xml_value(value)
 
     @property
     def name(self):
@@ -246,7 +247,7 @@ class GeometryCell:
 
     @name.setter
     def name(self, value: str):
-        self.xml.attrib["N"] = str(value)
+        self.xml.attrib["N"] = xml_value(value)
 
     @property
     def func(self):  # assume F stands for function, i.e. F="Width*0.5"

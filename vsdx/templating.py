@@ -161,14 +161,12 @@ class JinjaTemplatingMixin:
             jinja_show_if = f"{{% if {show_if} %}}"  # translate to actual jinja if statement
             # move the for loop to start of shapes element (just before first Shape element)
             if previous_shape:
-                previous_shape.xml.tail = (
-                    str(previous_shape.xml.tail or "") + jinja_show_if
-                )  # add jinja loop text after previous shape, before this element
+                previous_shape.xml.tail = (previous_shape.xml.tail or "") + jinja_show_if
             else:
                 parent_xml = shape.parent.xml
                 # Page.xml is an ElementTree; Shape.xml is an Element
                 parent_root = parent_xml.getroot() if isinstance(parent_xml, ET.ElementTree) else parent_xml
-                parent_text = str(parent_root.text or "") if parent_root is not None else ""
+                parent_text = parent_root.text or "" if parent_root is not None else ""
                 if parent_root is not None:
                     parent_root.text = (
                         parent_text + jinja_show_if

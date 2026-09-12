@@ -21,6 +21,11 @@ def xml_to_file(xml: ET.ElementTree[ET.Element], filename: str, zip_file_content
     zip_file_contents[filename] = io.BytesIO(file.getvalue())
 
 
+def xml_value(value: object) -> str:
+    """Coerce a value before assigning it to an ElementTree attribute."""
+    return str(value)
+
+
 def require_tree(tree: ET.ElementTree[ET.Element] | None, description: str) -> ET.ElementTree[ET.Element]:
     """A required in-memory ElementTree (already parsed from the package)."""
     if tree is None:

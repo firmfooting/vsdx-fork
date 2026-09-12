@@ -15,6 +15,18 @@ basedir = os.path.dirname(os.path.relpath(__file__))
 # file structure
 
 
+def test_apply_text_context_coerces_non_string_values():
+    root = ET.fromstring(
+        f'<PageContents xmlns="{namespace[1:-1]}"><Shapes><Shape ID="1"><Text>Year {{{{year}}}}</Text></Shape></Shapes></PageContents>'
+    )
+
+    VisioFile.apply_text_context(root, {"year": 2020})
+
+    shape = root.find(f".//{namespace}Shape")
+    assert shape is not None
+    assert VisioFile.get_shape_text(shape) == "Year 2020"
+
+
 def test_invalid_file_type():
     """Test that opening an invalid file name results in a TypeError"""
     filename = __file__

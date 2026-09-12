@@ -11,6 +11,7 @@ import vsdx
 from vsdx import namespace
 
 from .logging_support import get_logger
+from .xmlio import xml_value
 
 logger = get_logger(__name__)
 
@@ -59,7 +60,7 @@ class Cell:
 
     @formula.setter
     def formula(self, value: str):
-        self.xml.attrib["F"] = str(value)
+        self.xml.attrib["F"] = xml_value(value)
 
     @property
     def name(self):
@@ -462,7 +463,7 @@ class Shape:
 
     @line_color.setter
     def line_color(self, value: str):
-        self.set_cell_value("LineColor", str(value))
+        self.set_cell_value("LineColor", xml_value(value))
 
     @property
     def fill_color(self) -> str | None:
@@ -470,7 +471,7 @@ class Shape:
 
     @fill_color.setter
     def fill_color(self, value: str):
-        self.set_cell_value("FillForegnd", str(value))
+        self.set_cell_value("FillForegnd", xml_value(value))
 
     @property
     def text_color(self) -> str | None:

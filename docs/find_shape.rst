@@ -1,113 +1,84 @@
-Finding Shapes
-==============
+Find pages and shapes
+=====================
 
-The anatomy of a vsdx file is complex - but can be summarised as Pages, containing Shapes, which might contain their own child Shapes (and so on).
+A Visio document contains pages. Each page contains top-level shapes, and a
+shape may contain nested shapes of its own.
 
-When using vsdx to process a diagram it is likely that you will want to act on a specific shape or shapes.
-To do this you will typically first identify the page, and then use some criteria to select the shape or shapes.
+Select a page
+-------------
 
-Selecting a Page
-----------------
-
-There are two ways to select a Page - either by (zero-based) index, or by (case-sensitive) name.
-
-**Select a Page by index**
+Pages can be selected by zero-based index or case-sensitive name.
 
 .. code-block:: python
 
-    from vsdx import VisioFile  # import the package
+   from vsdx import VisioFile
 
-    with VisioFile('diagram.vsdx') as vis:  # create a VisioFile object from a file
-        page = vis.pages[0]  # get the first Page in vsdx file
-        print(page.name)  # print the name of the page
+   with VisioFile("diagram.vsdx") as vis:
+       first_page = vis.pages[0]
+       named_page = vis.get_page_by_name("Current state")
 
+       print(first_page.name)
+       if named_page is not None:
+           print(named_page.name)
 
-**Select a Page by name**
+Find one shape
+--------------
 
-.. code-block:: python
-
-    from vsdx import VisioFile  # import the package
-
-    with VisioFile('diagram.vsdx') as vis:  # create a VisioFile object from a file
-        page = vis.get_page_by_name('Page 1')  # get Page with name 'Page 1
-        print(page.name)  # print the name of the page
-
-
-Selecting a Shape or Shapes
------------------
-
-**Find Shape in a Page**
-
-You can select a Shape or list of Shapes by ID, shape text, shape property
+The ``find_shape_*`` methods return the first matching
+:class:`vsdx.shapes.Shape`, or ``None``.
 
 .. code-block:: python
 
-    from vsdx import VisioFile  # import the package
+   with VisioFile("diagram.vsdx") as vis:
+       page = vis.pages[0]
 
-    with VisioFile('diagram.vsdx') as vis:  # create a VisioFile object from a file
-        page = vis.pages[0]  # get first page
-        shape_1 = page.find_shape_by_id('1')  # get Shape in page with ID of '1'
-        shape_A = page.find_shape_by_text('A')  # get first Shape in page where text contains 'A'
-        shape_with_red_label = page.find_shape_by_property_label('red')  # get first Shape in page with a property label of 'red'
-        code_a_shape = page.find_shape_by_property_label_value('code', 'a')  # get first Shape in page where property 'code' = 'a'
+       by_id = page.find_shape_by_id("1")
+       by_text = page.find_shape_by_text("Assessment")
+       by_label = page.find_shape_by_property_label("Status")
+       by_data = page.find_shape_by_property_label_value("Status", "Open")
 
-Each of these 'find_shape_' methods returns a Shape object (or None).
+Shape Data labels are the names shown in Visio's Shape Data window. They are
+not necessarily the internal row names stored in the file.
 
-**Note:** the Shape property label is the one that is visible in the 'Shape Data Window' in Microsoft Visio, it is not the same as the property name.
-
-**Find Shapes in a Page**
-
-Sometimes you want to find a group of related Shapes in a Page.
-
-**Note:** when selecting by ID, as the ID should be unique, no find_shapes_by_id() method is available.
-
-.. code-block:: python
-
-    from vsdx import VisioFile  # import the package
-
-    with VisioFile('diagram.vsdx') as vis:  # create a VisioFile object from a file
-        page = vis.pages[0]  # get first page
-        shapes_A = page.find_shapes_by_text('A)  # get all Shapes in page where text contains 'A'
-        shapes_with_red_label = page.find_shapes_by_property_label('red')  # get all Shapes in page with a property label of 'red'
-        code_a_shapes = page.find_shapes_by_property_label_value('code', 'a')  # get all Shapes in page where property 'code' = 'a'
-
-Each of these 'find_shapes_' method returns typed list of Shapes - List[Shape]
-
-Selecting within a Shape
-------------------------
-
-As a Shape can contain other Shapes, which themselves can contain more Shapes. Each Shape object supports the same methods as Page for selecting shapes, as per exampels below:
-
-.. code-block:: python
-
-    from vsdx import VisioFile  # import the package
-
-    with VisioFile('diagram.vsdx') as vis:  # create a VisioFile object from a file
-        page = vis.pages[0]  # get first page
-        group_shape = page.find_shape_by_property_label('my_container_1')
-        my_shape = group_shape.find_by_text('my shape')  # find a Shape within the group shape
-
-In the example above, there might be many Shapes with the text 'my shape', but this will find the first within your group shape tagged with a property/label
-
-Selecting all or child Shapes
+Find several shapes
 -------------------
-As mentioned above, each Page is a hierarchy of Shapes.
 
-Both Page and Shape provide all_shapes and child_shapes properties.
+The plural methods return ``list[Shape]`` and return an empty list when there
+are no matches.
 
 .. code-block:: python
 
-    from vsdx import VisioFile  # import the package
+   with VisioFile("diagram.vsdx") as vis:
+       page = vis.pages[0]
 
-    with VisioFile('diagram.vsdx') as vis:
-        # open first page
-        page = vis.pages[0]
-        # Page.child_shapes and Page.all_shapes properties
-        page_top_shapes = page.child_shapes  # just those Shapes directly under Page
-        all_shapes_in_page = page.all_shapes  # all shapes in the hierarchy of Page
-        # Shape.child_shapes and Shape.all_shapes properties
-        shape = page.all_shapes[0] #  get first Shape in page
-        shape_children = shape.child_shapes  # just Shapes directly under Shape
-        shape_all_shapes = shape.all_shapes  # all children in hierarchy under Shape
+       mentions_review = page.find_shapes_by_text("Review")
+       status_fields = page.find_shapes_by_property_label("Status")
+       open_items = page.find_shapes_by_property_label_value("Status", "Open")
+       numbered_steps = page.find_shapes_by_regex(r"Step \d+")
 
+Search within a grouped shape
+-----------------------------
 
+Page and Shape expose the same recursive finder pattern. Search a group when a
+match should be constrained to that subtree.
+
+.. code-block:: python
+
+   group = page.find_shape_by_text("Assessment group")
+   if group is not None:
+       task = group.find_shape_by_text("Review")
+
+Traverse the hierarchy
+----------------------
+
+``child_shapes`` contains only direct children. ``all_shapes`` recursively
+includes descendants.
+
+.. code-block:: python
+
+   top_level = page.child_shapes
+   every_shape = page.all_shapes
+
+   if every_shape:
+       direct_children = every_shape[0].child_shapes
+       all_descendants = every_shape[0].all_shapes

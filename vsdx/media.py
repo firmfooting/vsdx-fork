@@ -6,7 +6,7 @@ from .vsdxfile import VisioFile
 
 def _media_path(filename: str) -> str:
     """Path to a bundled media vsdx in the module-adjacent 'media' folder."""
-    basedir = str(os.path.relpath(__file__))
+    basedir = os.path.relpath(__file__)
     return os.path.join(os.sep.join(basedir.split(os.sep)[:-1]), "media", filename)
 
 

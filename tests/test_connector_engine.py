@@ -84,6 +84,43 @@ def test_connect_point_glue_requires_connection_points():
             page.connect_shapes(a, b, route='point')
 
 
+def test_connect_shapes_combines_point_glue_and_curved_routing():
+    fixture = os.path.join(test_directory, 'fixtures', 'com_reference', 's05_swimlanes_cfflow.vsdx')
+    with VisioFile(fixture) as vis:
+        page = vis.pages[0]
+        source = page.find_shape_by_id('90')
+        target = page.find_shape_by_id('97')
+        assert source is not None and target is not None
+
+        connector = page.connect_shapes(source, target, route='point|curved', from_cp=0, to_cp=2)
+
+        source_point = f'PAR(PNT(Sheet{source.ID}!Connections.X1,Sheet{source.ID}!Connections.Y1))'
+        target_point = f'PAR(PNT(Sheet{target.ID}!Connections.X3,Sheet{target.ID}!Connections.Y3))'
+        assert connector.cells['BeginX'].formula == source_point
+        assert connector.cells['EndX'].formula == target_point
+        assert connector.cells['ShapeRouteStyle'].value == '17'
+        assert connector.cells['ConLineRouteExt'].value == '2'
+        records = {connect.from_rel: connect for connect in page.connects if connect.from_id == str(connector.ID)}
+        assert records['BeginX'].to_rel == 'Connections.X1'
+        assert records['EndX'].to_rel == 'Connections.X3'
+
+
+def test_invalid_route_fails_before_mutating_page():
+    with VisioFile(os.path.join(test_directory, 'test8_simple_connector.vsdx')) as vis:
+        page = vis.pages[0]
+        source = page.find_shape_by_text('Shape A')
+        target = page.find_shape_by_text('Shape B')
+        assert source is not None and target is not None
+        before_shapes = len(page.all_shapes)
+        before_connects = len(page.connects)
+
+        with pytest.raises(ValueError, match='unknown connector route'):
+            page.connect_shapes(source, target, route='diagonal')
+
+        assert len(page.all_shapes) == before_shapes
+        assert len(page.connects) == before_connects
+
+
 def test_connector_round_trip_and_zip_validity():
     with tempfile.TemporaryDirectory() as tmp:
         src = get_copy('test8_simple_connector.vsdx', tmp)
