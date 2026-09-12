@@ -35,7 +35,7 @@ class VisioFileDiff:
     def __str__(self):
         return f"VisioFileDiff(a={self.filepath_a}, b={self.filepath_b})"
 
-    def get_file_diffs(self):
+    def get_file_diffs(self) -> dict[str, list[str]]:
         common_members = self.common_members()
         diffs = {}
         d = difflib.Differ()

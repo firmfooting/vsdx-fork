@@ -90,13 +90,13 @@ class Page:
         return f"<Page name={self.name} file={self.filename} >"
 
     @property
-    def connects(self):
+    def connects(self) -> list[Connect]:
         return self.get_connects()
 
     @deprecation.deprecated(
         deprecated_in="v0.5.0", removed_in="1.0.0", current_version=vsdx.__version__, details="Use Page.name property instead"
     )
-    def set_name(self, value: str):
+    def set_name(self, value: str) -> None:
         from .vsdxfile import file_to_xml  # to break circular imports - is this really needed?
 
         pages_filename = self.vis._pages_filename()  # pages contains Page name, width, height, mapped to Id
@@ -235,7 +235,7 @@ class Page:
         current_version=vsdx.__version__,
         details="Use Page.child_shapes property to access top level shapes of a Page",
     )
-    def shapes(self):
+    def shapes(self) -> list[Shape]:
         """Return a list of :class:`Shape` objects
 
         Note: typically returns one :class:`Shape` object which itself contains :class:`Shape` objects
@@ -323,7 +323,7 @@ class Page:
                 ET.tostring(rels_root, xml_declaration=True, encoding="UTF-8")
             )
 
-    def get_connects(self):
+    def get_connects(self) -> list[Connect]:
         elements = self.xml.findall(f".//{namespace}Connect")  # search recursively
         connects = [Connect(xml=e, page=self) for e in elements]
         return connects
@@ -498,7 +498,7 @@ class Page:
             to_cp=to_cp,
         )
 
-    def delete_shape(self, shape: Shape):
+    def delete_shape(self, shape: Shape) -> None:
         """Delete a shape from this page, removing any incident connectors.
 
         Connectors whose Begin or End glue references the shape are deleted
