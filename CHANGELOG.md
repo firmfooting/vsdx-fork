@@ -18,8 +18,10 @@ available at <https://github.com/dave-howard/vsdx>.
   the package root, so save-after-close is caught by normal `except Exception`
   handling and can be caught specifically.
 - The CI build job now smoke-tests the built wheel in a clean virtual
-  environment (install, import, `pip show`, `py.typed` presence) before the
-  distribution is uploaded as an artifact.
+  environment from outside the checkout: wheel contents are inspected for
+  `py.typed` and both bundled media documents, and the installed distribution
+  is exercised through `Media()`, `create_shape()`, connector creation, save
+  and reopen before the artifact is uploaded.
 - CI cancels superseded runs on the same ref via a concurrency group.
 - Page `width`/`height` setters reject `None`, non-numeric and non-finite values
   and non-positive dimensions instead of silently writing `0.0`; the cell is

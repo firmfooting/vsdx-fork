@@ -115,9 +115,10 @@ jobs:
         run: |
           uv venv dist-check
           uv pip install --python dist-check/bin/python dist/*.whl
-          dist-check/bin/python -c "import vsdx; print(f'vsdxkit {vsdx.__version__} imports cleanly')"
           uv pip show --python dist-check/bin/python vsdxkit >/dev/null
-          dist-check/bin/python -c "import os, vsdx; assert os.path.exists(os.path.join(os.path.dirname(vsdx.__file__), 'py.typed')), 'py.typed missing from wheel'"
+          # run from outside the checkout so the source tree cannot shadow the wheel
+          cd "$RUNNER_TEMP"
+          "$GITHUB_WORKSPACE/dist-check/bin/python" "$GITHUB_WORKSPACE/tools/smoke_wheel.py" "$GITHUB_WORKSPACE"/dist/*.whl
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v4
         with:
           name: dist
