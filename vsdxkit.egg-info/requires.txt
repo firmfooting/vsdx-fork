@@ -1,8 +1,0 @@
-Jinja2
-deprecation
-
-[dev]
-pytest
-pytest-cov
-ruff
-pyrefly
