@@ -95,31 +95,47 @@ def test_set_page_size(filename: str, page_index: int, page_scale: float):
 
 
 @pytest.mark.parametrize(
-    "filename, page_index",
+    "filename, page_index, expected_bounds",
     [
-        ("test1.vsdx", 0),
-        ("test2.vsdx", 0),
-        ("test1.vsdx", 2),
-        ("test2.vsdx", 2),
+        (
+            "test1.vsdx",
+            0,
+            {
+                "Shape Text": (0.25, 9.868, 2.415, 11.443),
+                "Shape to remove": (3.051, 9.868, 5.217, 11.443),
+                "Shape to copy": (5.852, 9.868, 8.018, 11.443),
+            },
+        ),
+        (
+            "test2.vsdx",
+            0,
+            {
+                "Shape Text": (0.0, 0.0, 2.165, 1.575),
+                "Group shape text": (0.25, 9.868, 2.415, 11.443),
+            },
+        ),
+        ("test1.vsdx", 2, {"Shape was here already": (0.645, 9.011, 2.811, 10.586)}),
+        ("test2.vsdx", 2, {"Shape already here": (0.25, 9.868, 2.415, 11.443)}),
     ],
 )
-def test_get_page_bounds(filename: str, page_index: int):
+def test_get_page_bounds(filename: str, page_index: int, expected_bounds: dict):
+    """Shape bounds must match fixture-derived absolute expectations.
+
+    Expected values are the coordinates observed in the fixture documents;
+    they pin the bounds calculation against silent zeroing or offset shifts.
+    """
     out_file = os.path.join(basedir, "out", f"{filename[:-5]}_test_get_page_bounds_{page_index}.vsdx")
     with VisioFile(os.path.join(basedir, filename)) as vis:
         page = vis.pages[page_index]
         assert page.all_shapes  # a bounds test needs shapes to bound
 
-        boxes = [s.bounds for s in page.all_shapes]
-        min_x = min(box[0] for box in boxes)
-        min_y = min(box[1] for box in boxes)
-        max_x = max(box[2] for box in boxes)
-        max_y = max(box[3] for box in boxes)
-        for box in boxes:
-            # every shape's bounds must sit inside the page-wide envelope
-            assert box[0] >= min_x - 0.001
-            assert box[1] >= min_y - 0.001
-            assert box[2] <= max_x + 0.001
-            assert box[3] <= max_y + 0.001
+        shape_by_text = {s.text: s for s in page.all_shapes if s.text}
+        assert shape_by_text, "fixture shapes carry no text to key expectations"
+        for text, expected in expected_bounds.items():
+            shape = shape_by_text.get(text)
+            assert shape is not None, f"fixture shape {text!r} not found on page {page_index}"
+            actual = tuple(round(value, 3) for value in shape.bounds)
+            assert actual == expected, f"{text!r}: {actual} != {expected}"
 
         box = vsdx.media.Media().rectangle
         for s in page.all_shapes:
@@ -471,16 +487,25 @@ def test_add_multiple_connectors(filename: str):
         vis.save_vsdx(out_file)
 
     # the contract is persistence: connector shapes and their Connect records
-    # must survive save/reopen
+    # must survive save/reopen, for both created connectors
     with VisioFile(out_file) as vis:
         new_page = vis.pages[-1]
-        assert new_page.find_shape_by_text("new shape 1") is not None
-        assert new_page.find_shape_by_text("new shape 2") is not None
-        assert new_page.find_shape_by_text("new shape 3") is not None
+        shape1 = new_page.find_shape_by_text("new shape 1")
+        shape2 = new_page.find_shape_by_text("new shape 2")
+        shape3 = new_page.find_shape_by_text("new shape 3")
+        assert shape1 is not None and shape2 is not None and shape3 is not None
         connectors = [s for s in new_page.all_shapes if "BeginX" in s.cells]
         assert len(connectors) >= 2
-        connect_pairs = {(c.from_id, c.to_id) for c in new_page.connects}
-        assert connect_pairs, "no Connect records persisted"
+        # each Connect.create() yields one connector shape with one Connect
+        # record per endpoint, so group endpoints by connector and require
+        # both created pairs to appear in full
+        endpoints_by_connector: dict[str, set[str]] = {}
+        for connect in new_page.connects:
+            if connect.from_id is not None:
+                endpoints_by_connector.setdefault(connect.from_id, set()).add(str(connect.to_id))
+        endpoint_sets = [set(ids) for ids in endpoints_by_connector.values()]
+        assert {str(shape1.ID), str(shape2.ID)} in endpoint_sets, endpoints_by_connector
+        assert {str(shape2.ID), str(shape3.ID)} in endpoint_sets, endpoints_by_connector
 
 
 @pytest.mark.parametrize(

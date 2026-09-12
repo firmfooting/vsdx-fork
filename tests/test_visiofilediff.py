@@ -64,7 +64,14 @@ def test_visiodiff_detects_added_connector(vsdx_copy, tmp_path):
     assert file_diff.removed_members() == set()
     added = file_diff.added_members()
     assert all("master" in member or "page" in member for member in added), added
-    # the page part gained Connect records, so at least one textual diff exists
-    assert file_diff.diffs
-    changed = "".join("".join(lines) for lines in file_diff.diffs.values())
-    assert "Connect" in changed
+    # the page part must have gained actual Connect records: inspect only the
+    # added diff lines (unchanged lines carry 'ConnectorSchemeIndex' noise),
+    # so an empty diff or a no-op Connect.create() cannot satisfy this
+    assert file_diff.diffs, "no textual diffs at all"
+    page_part_key = next((key for key in file_diff.diffs if key.endswith("page1.xml")), None)
+    assert page_part_key is not None, f"page part absent from diffs: {list(file_diff.diffs)}"
+    added_lines = [line[2:] for line in file_diff.diffs[page_part_key] if line.startswith("+ ")]
+    # Connect records are the only added lines carrying FromSheet (namespace
+    # prefixes vary, so match on the attribute, not the tag)
+    connect_records = [line for line in added_lines if "FromSheet" in line]
+    assert connect_records, f"no Connect records among added lines: {added_lines[:10]}"
