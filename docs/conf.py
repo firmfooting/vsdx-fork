@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.abspath(".."))
 import vsdx
 
 project = "vsdxkit"
-copyright = "2021–2026, Dave Howard and Shaun Eccles"  # update when preparing each release
+copyright = "2021–2026, Dave Howard and Shaun Eccles"  # noqa: RUF001  # update when preparing each release
 author = "Dave Howard and Shaun Eccles"
 release = vsdx.__version__
 version = vsdx.__version__

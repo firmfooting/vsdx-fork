@@ -20,6 +20,7 @@ def test_bundled_media_path_is_absolute_and_cwd_independent(tmp_path, monkeypatc
 def test_media_curved_connector_returns_curved():
     """Regression: Media.curved_connector returned the straight connector."""
     from vsdx import Media
+
     media = Media()
     try:
         curved = media.curved_connector
@@ -28,7 +29,7 @@ def test_media_curved_connector_returns_curved():
         assert curved.ID != straight.ID
         with VisioFile(str(basedir / "media.vsdx")) as vis:
             page = vis.pages[0]
-            expected_curved = page.find_shape_by_text('CURVED_CONNECTOR')
+            expected_curved = page.find_shape_by_text("CURVED_CONNECTOR")
             assert expected_curved is not None
             assert curved.ID == expected_curved.ID
     finally:
