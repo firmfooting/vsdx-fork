@@ -3,7 +3,7 @@ import pprint
 
 import pytest
 
-from vsdx import VisioFile
+from vsdx import Connect, VisioFile
 from vsdx.vsdxdiff import VisioFileDiff
 
 # code to get basedir of this test file in either linux/windows
@@ -26,7 +26,6 @@ def test_create_visiodiff(filename_a: str, filename_b: str):
 
 
 # next test, open file, set text of shape, save as - then compare the two
-@pytest.mark.skip
 @pytest.mark.parametrize(
     ("filename_a", "filename_b"),
     [
@@ -34,45 +33,45 @@ def test_create_visiodiff(filename_a: str, filename_b: str):
         ("test2.vsdx", "test2_outfile.vsdx"),
     ],
 )
-def test_visiodiff_before_after(filename_a: str, filename_b: str):
-    filepath_a = os.path.join(basedir, filename_a)
-    filepath_b = os.path.join(basedir, "out", filename_b)
+def test_visiodiff_before_after(filename_a: str, filename_b: str, vsdx_copy, tmp_path):
+    filepath_a = vsdx_copy(filename_a)
+    filepath_b = os.path.join(str(tmp_path), filename_b)
     with VisioFile(filepath_a) as vis:
-        print(f"saving as {filepath_b}")
         vis.save_vsdx(filepath_b)
 
-    fd = VisioFileDiff(filepath_a, filepath_b)
+    file_diff = VisioFileDiff(filepath_a, filepath_b)
 
-    print(f"fd={fd}")
-    print(f"Added in {filename_b} {fd.added_members()}")
-    print(f"Removed in {filename_b} {fd.removed_members()}")
-    for m in fd.common_members():
-        diff = fd.diffs.get(m)
-        print(f"\n\n{m} {type(diff)} len:{len(diff) if diff else 0}")
-        if diff:
-            for num, line in enumerate(diff, start=1):
-                print(f"{num} {line}")
+    # a round trip must not add or remove package members
+    assert file_diff.added_members() == set()
+    assert file_diff.removed_members() == set()
+    assert file_diff.common_members()
 
 
-@pytest.mark.skip
-@pytest.mark.parametrize(
-    ("filename_a", "filename_b"),
-    [
-        ("test4_connectors_out.vsdx", "test4_connectors_added.vsdx"),
-    ],
-)
-def test_visiodiff_two_files(filename_a: str, filename_b: str):
-    filepath_a = os.path.join(basedir, filename_a)
-    filepath_b = os.path.join(basedir, filename_b)
+def test_visiodiff_detects_added_connector(vsdx_copy, tmp_path):
+    """Adding a connector between two shapes must show up in the diff."""
+    filepath_a = vsdx_copy("test1.vsdx")
+    filepath_b = os.path.join(str(tmp_path), "with_connector.vsdx")
+    with VisioFile(filepath_a) as vis:
+        page = vis.pages[0]
+        shapes = page.all_shapes
+        assert len(shapes) >= 2
+        Connect.create(page=page, from_shape=shapes[0], to_shape=shapes[1])
+        vis.save_vsdx(filepath_b)
 
-    fd = VisioFileDiff(filepath_a, filepath_b)
-
-    print(f"fd={fd}")
-    print(f"Added in {filename_b} {fd.added_members()}")
-    print(f"Removed in {filename_b} {fd.removed_members()}")
-    for m in fd.common_members():
-        diff = fd.diffs.get(m)
-        print(f"\n\n{m} {type(diff)} len:{len(diff) if diff else 0}")
-        if diff:
-            for num, line in enumerate(diff, start=1):
-                print(f"{num} {line}")
+    file_diff = VisioFileDiff(filepath_a, filepath_b)
+    # connector creation legitimately imports media masters and the page rels
+    # part, so members are added but none are removed
+    assert file_diff.removed_members() == set()
+    added = file_diff.added_members()
+    assert all("master" in member or "page" in member for member in added), added
+    # the page part must have gained actual Connect records: inspect only the
+    # added diff lines (unchanged lines carry 'ConnectorSchemeIndex' noise),
+    # so an empty diff or a no-op Connect.create() cannot satisfy this
+    assert file_diff.diffs, "no textual diffs at all"
+    page_part_key = next((key for key in file_diff.diffs if key.endswith("page1.xml")), None)
+    assert page_part_key is not None, f"page part absent from diffs: {list(file_diff.diffs)}"
+    added_lines = [line[2:] for line in file_diff.diffs[page_part_key] if line.startswith("+ ")]
+    # Connect records are the only added lines carrying FromSheet (namespace
+    # prefixes vary, so match on the attribute, not the tag)
+    connect_records = [line for line in added_lines if "FromSheet" in line]
+    assert connect_records, f"no Connect records among added lines: {added_lines[:10]}"
