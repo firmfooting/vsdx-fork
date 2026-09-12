@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Iterable
 from enum import IntEnum
 from typing import TYPE_CHECKING
@@ -18,7 +19,24 @@ from vsdx import namespace
 
 from .connectors import Connect
 from .shapes import Shape
-from .xmlio import require_element
+from .xmlio import require_element, xml_value
+
+
+def _dimension_value(value: float | str | None) -> str:
+    """Return a PageSheet dimension value without serialising nulls or zeros.
+
+    A page with zero or negative width/height is not a valid Visio page, so
+    unlike shape geometry the setters reject non-positive values outright.
+    """
+    if value is None:
+        raise TypeError("page dimension cannot be None")
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"page dimension must be a finite positive number, got {value!r}") from error
+    if not math.isfinite(number) or number <= 0:
+        raise ValueError(f"page dimension must be a finite positive number, got {value!r}")
+    return xml_value(number)
 
 
 class PagePosition(IntEnum):
@@ -183,7 +201,7 @@ class Page:
 
     @width.setter
     def width(self, value: float | str | None) -> None:
-        self._pagesheet_cell("PageWidth").attrib["V"] = str(float(value or 0.0))
+        self._pagesheet_cell("PageWidth").attrib["V"] = _dimension_value(value)
 
     @property
     def height(self) -> float:
@@ -191,7 +209,7 @@ class Page:
 
     @height.setter
     def height(self, value: float | str | None) -> None:
-        self._pagesheet_cell("PageHeight").attrib["V"] = str(float(value or 0.0))
+        self._pagesheet_cell("PageHeight").attrib["V"] = _dimension_value(value)
 
     @property
     def xml(self) -> ET.ElementTree[ET.Element]:
