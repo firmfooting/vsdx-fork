@@ -181,7 +181,7 @@ class Connect:
             return
         for shape, cp in ((from_shape, from_cp), (to_shape, to_cp)):
             cp_count = Connect._connection_point_count(shape)
-            if cp >= cp_count:
+            if cp < 0 or cp >= cp_count:
                 raise ValueError(
                     f"Shape ID {shape.ID} has {cp_count} connection point(s); cannot glue to connection point index {cp}"
                 )

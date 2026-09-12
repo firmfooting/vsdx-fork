@@ -45,6 +45,16 @@ def test_create_rejects_invalid_connection_point_without_mutating_package(atomic
     assert _snapshot(atomicity_page) == before
 
 
+def test_create_rejects_negative_connection_point_without_mutating_package(atomicity_page):
+    """Zero-based indices: negatives are invalid even before the upper bound."""
+    shapes = atomicity_page.all_shapes
+    a, b = shapes[0], shapes[1]
+    before = _snapshot(atomicity_page)
+    with pytest.raises(ValueError, match="connection point"):
+        Connect.create(page=atomicity_page, from_shape=a, to_shape=b, route="point", from_cp=-1)
+    assert _snapshot(atomicity_page) == before
+
+
 def test_retarget_rejects_invalid_connection_point_without_mutating_package(vsdx_copy):
     """A rejected retarget must keep the connector's original records intact."""
     path = vsdx_copy("test4_connectors.vsdx")
