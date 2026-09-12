@@ -82,7 +82,7 @@ jobs:
           enable-cache: false
           version: "0.12.5"
       - name: Install lint and documentation tools
-        run: uv sync --locked --no-default-groups --group lint --extra docs
+        run: uv sync --locked --no-default-groups --group lint --group docs
       - name: ruff check
         run: uv run --no-sync ruff check vsdx tests
       - name: ruff format

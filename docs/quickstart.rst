@@ -69,9 +69,13 @@ Development install
 
    git clone https://github.com/shauneccles/vsdx.git
    cd vsdx
-   uv sync --locked --extra docs
+   uv sync --locked --group docs
    uv run --no-sync python -m pytest tests -q
    uv run --no-sync ruff check vsdx tests/test_imports.py tests/test_shape_coordinates.py
    uv run --no-sync ruff format --check vsdx tests/test_imports.py tests/test_shape_coordinates.py
    uv run --no-sync pyrefly check vsdx --min-severity warn --output-format min-text
    uv run --no-sync sphinx-build -W --keep-going -b html docs docs/_build/html
+
+The ``docs`` group pins Sphinx, which requires Python 3.12 or later. Drop
+``--group docs`` from the sync to work on the library itself under Python 3.10
+or 3.11.
