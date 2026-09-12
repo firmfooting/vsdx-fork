@@ -19,9 +19,11 @@ available at <https://github.com/dave-howard/vsdx>.
   distribution is uploaded as an artifact.
 - The `Connect` constructor validates its inputs and always produces a complete
   instance: the page and XML element are required, the element must be a
-  namespaced `Connect` tag, and `FromSheet`/`ToSheet`/`FromCell`/`ToCell` must
-  be present. Invalid input raises `ValueError` instead of yielding an object
-  that fails later on missing attributes.
+  namespaced `Connect` tag, and the schema-required `FromSheet`/`ToSheet`
+  attributes must be present. `FromCell`/`ToCell` remain optional per the
+  `Connect_Type` schema and read as `None` when absent. Invalid input raises
+  `ValueError` instead of yielding an object that fails later on missing
+  attributes.
 - CI cancels superseded runs on the same ref via a concurrency group.
 - Pyrefly runs at the `strict` preset with zero diagnostics at warning severity
   and no in-source type suppression comments.
