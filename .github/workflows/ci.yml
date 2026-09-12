@@ -26,7 +26,7 @@ jobs:
     env:
       UV_PYTHON: ${{ matrix.python-version }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4  # v10.1.0
@@ -50,7 +50,7 @@ jobs:
     env:
       UV_PYTHON: ${{ matrix.python-version }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4  # v10.1.0
@@ -74,7 +74,7 @@ jobs:
     env:
       UV_PYTHON: '3.12'
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4  # v10.1.0
@@ -89,6 +89,8 @@ jobs:
         run: uv run --no-sync ruff format --check vsdx tests
       - name: pyrefly strict
         run: uv run --no-sync pyrefly check vsdx --min-severity warn --output-format min-text
+      - name: Verify action pin annotations
+        run: uv run --no-sync python tools/check_action_pins.py
       - name: Sphinx documentation
         run: uv run --no-sync sphinx-build -W --keep-going -b html docs docs/_build/html
 
@@ -100,7 +102,7 @@ jobs:
     env:
       UV_PYTHON: '3.12'
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4  # v10.1.0
@@ -115,10 +117,11 @@ jobs:
         run: |
           uv venv dist-check
           uv pip install --python dist-check/bin/python dist/*.whl
-          dist-check/bin/python -c "import vsdx; print(f'vsdxkit {vsdx.__version__} imports cleanly')"
           uv pip show --python dist-check/bin/python vsdxkit >/dev/null
-          dist-check/bin/python -c "import os, vsdx; assert os.path.exists(os.path.join(os.path.dirname(vsdx.__file__), 'py.typed')), 'py.typed missing from wheel'"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v4
+          # run from outside the checkout so the source tree cannot shadow the wheel
+          cd "$RUNNER_TEMP"
+          "$GITHUB_WORKSPACE/dist-check/bin/python" "$GITHUB_WORKSPACE/tools/smoke_wheel.py" "$GITHUB_WORKSPACE"/dist/*.whl
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: dist
           path: dist/
