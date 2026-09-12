@@ -69,11 +69,9 @@ Development install
 
    git clone https://github.com/shauneccles/vsdx.git
    cd vsdx
-   python -m venv .venv
-   . .venv/bin/activate
-   python -m pip install -e ".[dev,docs]"
-   python -m pytest tests -q
-   ruff check vsdx
-   ruff format --check vsdx
-   pyrefly check vsdx --min-severity warn --output-format min-text
-   sphinx-build -W --keep-going -b html docs docs/_build/html
+   uv sync --locked --extra docs
+   uv run --no-sync python -m pytest tests -q
+   uv run --no-sync ruff check vsdx tests/test_imports.py
+   uv run --no-sync ruff format --check vsdx tests/test_imports.py
+   uv run --no-sync pyrefly check vsdx --min-severity warn --output-format min-text
+   uv run --no-sync sphinx-build -W --keep-going -b html docs docs/_build/html

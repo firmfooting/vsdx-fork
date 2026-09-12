@@ -37,9 +37,7 @@ For development:
 ```bash
 git clone https://github.com/shauneccles/vsdx.git
 cd vsdx
-python -m venv .venv
-. .venv/bin/activate          # Windows: .venv\Scripts\activate
-python -m pip install -e ".[dev,docs]"
+uv sync --locked --extra docs
 ```
 
 Python 3.10–3.14 is supported on Linux and Windows.
@@ -175,12 +173,12 @@ The package also supports its existing group-shape loop and `showif` conventions
 ## Development and verification
 
 ```bash
-python -m pytest tests -q
-ruff check vsdx
-ruff format --check vsdx
-pyrefly check vsdx --min-severity warn
-sphinx-build -W --keep-going -b html docs docs/_build/html
-python -m build
+uv run --no-sync python -m pytest tests -q
+uv run --no-sync ruff check vsdx tests/test_imports.py
+uv run --no-sync ruff format --check vsdx tests/test_imports.py
+uv run --no-sync pyrefly check vsdx --min-severity warn --output-format min-text
+uv run --no-sync sphinx-build -W --keep-going -b html docs docs/_build/html
+uv run --no-sync python -m build
 ```
 
 The package is held at pyrefly's `strict` preset. CI tests Python 3.10–3.14 on Ubuntu and Windows. Connector and swimlane changes also run through `tools/visio_check.ps1`, which opens generated files in an invisible Microsoft Visio instance and fails on package repair or automation errors.
@@ -190,8 +188,8 @@ The package is held at pyrefly's `strict` preset. CI tests Python 3.10–3.14 on
 The Sphinx source is in [`docs/`](docs/). Build it locally with:
 
 ```bash
-python -m pip install sphinx sphinx-rtd-theme
-python -m sphinx -W --keep-going -b html docs docs/_build/html
+uv sync --locked --extra docs
+uv run --no-sync python -m sphinx -W --keep-going -b html docs docs/_build/html
 ```
 
 ## Provenance and licence

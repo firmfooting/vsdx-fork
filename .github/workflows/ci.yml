@@ -19,29 +19,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v5
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Install
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e . pytest
-      - name: Test
-        run: python -m pytest tests -q
-
-  minimum-dependencies:
-    name: minimum dependency import py${{ matrix.python-version }}
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ['3.10', '3.11', '3.12', '3.14']
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
         with:
@@ -50,78 +29,86 @@ jobs:
         with:
           enable-cache: false
           version: "0.12.5"
-      - name: Import all modules with the declared dependency floors
-        run: |
-          extra=()
-          if [[ "${{ matrix.python-version }}" == "3.10" || "${{ matrix.python-version }}" == "3.11" ]]; then
-            extra+=(--with "typing-extensions==4.4.0")
-          fi
-          uv run --no-project \
-            --python ${{ matrix.python-version }} \
-            --with . \
-            --with "Jinja2==3.1.6" \
-            --with "deprecation==2.1.0" \
-            "${extra[@]}" \
-            python - <<'PY'
-          from importlib import import_module
-          from importlib.metadata import version
-          import pkgutil
-          import sys
+      - name: Install
+        run: uv sync --locked --no-default-groups --group test
+      - name: Test
+        run: uv run --no-sync python -m pytest tests -q
 
-          import vsdx
-          from jinja2 import Template
-
-          assert version("Jinja2") == "3.1.6"
-          assert version("deprecation") == "2.1.0"
-          assert Template("{{ 1 + 1 }}").render() == "2"
-          for module in pkgutil.walk_packages(vsdx.__path__, f"{vsdx.__name__}."):
-              import_module(module.name)
-
-          if sys.version_info < (3, 12):
-              assert version("typing-extensions") == "4.4.0"
-          PY
+  minimum-dependencies:
+    name: lowest direct dependencies py${{ matrix.python-version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.14']
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4  # v10.1.0
+        with:
+          enable-cache: false
+          version: "0.12.5"
+      - name: Resolve declared dependency floors
+        run: uv lock --upgrade --resolution lowest-direct
+      - name: Install test environment
+        run: uv sync --frozen --no-default-groups --group test
+      - name: Show resolved versions
+        run: uv pip list --python .venv
+      - name: Test
+        run: uv run --no-sync python -m pytest tests -q
 
   lint:
     name: ruff + pyrefly
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      UV_PYTHON: '3.12'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
         with:
           persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v5
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4  # v10.1.0
         with:
-          python-version: '3.12'
+          enable-cache: false
+          version: "0.12.5"
       - name: Install lint and documentation tools
-        run: |
-          python -m pip install ruff==0.16.7 pyrefly==1.3.0 sphinx==8.1.3 sphinx-rtd-theme==3.1.0 -e .
+        run: uv sync --locked --no-default-groups --group lint --extra docs
       - name: ruff check
-        run: ruff check vsdx
+        run: uv run --no-sync ruff check vsdx tests/test_imports.py
       - name: ruff format
-        run: ruff format --check vsdx
+        run: uv run --no-sync ruff format --check vsdx tests/test_imports.py
       - name: pyrefly strict
-        run: pyrefly check vsdx --min-severity warn --output-format min-text
+        run: uv run --no-sync pyrefly check vsdx --min-severity warn --output-format min-text
       - name: Sphinx documentation
-        run: sphinx-build -W --keep-going -b html docs docs/_build/html
+        run: uv run --no-sync sphinx-build -W --keep-going -b html docs docs/_build/html
 
   build:
     name: build distribution
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      UV_PYTHON: '3.12'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4
         with:
           persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v5
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4  # v10.1.0
         with:
-          python-version: '3.12'
+          enable-cache: false
+          version: "0.12.5"
       - name: Build
         run: |
-          python -m pip install build
-          python -m build
+          uv sync --locked --no-default-groups --group build
+          uv run --no-sync python -m build
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v4
         with:
           name: dist
           path: dist/
+          if-no-files-found: error

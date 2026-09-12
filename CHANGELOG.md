@@ -18,6 +18,8 @@ available at <https://github.com/dave-howard/vsdx>.
   re-anchoring, swimlanes, search and Jinja templates.
 - Sphinx warning-as-error validation and a dedicated zizmor GitHub Actions audit
   in the CI gates.
+- Package-wide import coverage now runs as a normal test across the supported
+  Python and operating-system matrix.
 
 ### Fixed
 
@@ -48,6 +50,12 @@ available at <https://github.com/dave-howard/vsdx>.
 
 ### Changed
 
+- CI now uses a committed uv lock for normal test, lint and build jobs. The
+  minimum-dependency job regenerates that lock with
+  `--resolution lowest-direct` and runs the full test suite on the oldest and
+  newest supported Python versions.
+- Test and development tooling now use uv dependency groups instead of a
+  published `dev` extra.
 - The pyrefly preset is now `strict` rather than `basic`.
 - Runtime dependency floors now match the supported API and security baseline:
   `Jinja2>=3.1.6`, `deprecation>=2.1.0`, and `typing-extensions>=4.4.0` on
