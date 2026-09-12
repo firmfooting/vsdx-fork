@@ -7,6 +7,8 @@ import vsdx
 
 from .shapes import Shape
 
+namespace = "{http://schemas.microsoft.com/office/visio/2012/main}"
+
 
 class Connect:
     """Connect class to represent a connection between two `Shape` objects"""
@@ -26,14 +28,20 @@ class Connect:
 
     def __init__(self, xml: Element | None = None, page: vsdx.Page | None = None):
         if page is None:
-            return
-        if type(xml) is Element:  # create from xml
-            self.xml = xml
-            self.page = page  # type: vsdx.Page
-            self.from_id = xml.attrib.get("FromSheet")  # ref to the connector shape
-            self.to_id = xml.attrib.get("ToSheet")  # ref to the shape where the connector terminates
-            self.from_rel = xml.attrib.get("FromCell")  # i.e. EndX / BeginX
-            self.to_rel = xml.attrib.get("ToCell")  # i.e. PinX
+            raise ValueError("Connect requires the page containing the connection")
+        if xml is None:
+            raise ValueError("Connect requires the connection's XML element")
+        if type(xml) is not Element or xml.tag != f"{namespace}Connect":
+            raise ValueError(f"Connect requires a {namespace}Connect element, got {xml.tag!r}")
+        missing = [name for name in ("FromSheet", "ToSheet", "FromCell", "ToCell") if name not in xml.attrib]
+        if missing:
+            raise ValueError(f"Connect element is missing required attribute(s): {', '.join(missing)}")
+        self.xml = xml
+        self.page = page
+        self.from_id = xml.attrib["FromSheet"]  # ref to the connector shape
+        self.to_id = xml.attrib["ToSheet"]  # ref to the shape where the connector terminates
+        self.from_rel = xml.attrib["FromCell"]  # i.e. EndX / BeginX
+        self.to_rel = xml.attrib["ToCell"]  # i.e. PinX
 
     @staticmethod
     def create(

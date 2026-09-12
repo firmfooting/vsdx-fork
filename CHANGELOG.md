@@ -17,6 +17,11 @@ available at <https://github.com/dave-howard/vsdx>.
 - The CI build job now smoke-tests the built wheel in a clean virtual
   environment (install, import, `pip show`, `py.typed` presence) before the
   distribution is uploaded as an artifact.
+- The `Connect` constructor validates its inputs and always produces a complete
+  instance: the page and XML element are required, the element must be a
+  namespaced `Connect` tag, and `FromSheet`/`ToSheet`/`FromCell`/`ToCell` must
+  be present. Invalid input raises `ValueError` instead of yielding an object
+  that fails later on missing attributes.
 - CI cancels superseded runs on the same ref via a concurrency group.
 - Pyrefly runs at the `strict` preset with zero diagnostics at warning severity
   and no in-source type suppression comments.
