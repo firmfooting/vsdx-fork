@@ -102,7 +102,10 @@ class VisioFileDiff:
                     continue
                 payload = zip_ref.read(member.filename)
                 try:
-                    text = payload.decode("utf-8")
+                    # universal-newline translation, matching the previous
+                    # text-mode readlines() so CRLF-vs-LF packaging differences
+                    # are not reported as content changes
+                    text = payload.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
                 except UnicodeDecodeError:
                     digest = hashlib.sha256(payload).hexdigest()
                     file_contents[member.filename] = [f"binary sha256:{digest}"]

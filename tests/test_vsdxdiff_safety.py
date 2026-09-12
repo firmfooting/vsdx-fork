@@ -42,6 +42,17 @@ def test_different_binary_members_are_reported_as_changed(tmp_path):
     assert "custom/binary.dat" in file_diff.diffs, "changed binary member not reported"
 
 
+def test_equal_text_members_with_different_line_endings_do_not_report_change(tmp_path):
+    """CRLF-vs-LF packaging differences are not content changes (universal newlines)."""
+    document = str(tmp_path / "crlf.vsdx")
+    other = str(tmp_path / "lf.vsdx")
+    _make_vsdx(document, {"visio/document.xml": b"<xml>\r\n  <page/>\r\n</xml>\r\n"})
+    _make_vsdx(other, {"visio/document.xml": b"<xml>\n  <page/>\n</xml>\n"})
+
+    file_diff = VisioFileDiff(document, other)
+    assert file_diff.diffs == {}
+
+
 def test_equal_binary_members_do_not_report_change(tmp_path):
     document = str(tmp_path / "one.vsdx")
     other = str(tmp_path / "two.vsdx")
