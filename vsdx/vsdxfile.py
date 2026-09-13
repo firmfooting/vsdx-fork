@@ -263,14 +263,19 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
 
     @staticmethod
     def _preflight_eocd(path: str, limits: PackageLimits) -> None:
-        """Check the archive's declared entry count before ZipFile parses it.
+        """Validate the central directory before ZipFile parses it.
 
         Issue #20 review: the ``ZipFile`` constructor reads the whole central
         directory and builds a ``ZipInfo`` per entry before any of our checks
         run, so a crafted archive with millions of tiny entries costs memory
         proportional to its entry count first. The end-of-central-directory
-        record declares the entry count; read it raw and enforce the cap
-        before handing the file to ``ZipFile``.
+        record is read raw and its declared count enforced, then — because
+        every one of those fields is attacker-controlled — the actual
+        central-directory records are parsed sequentially (headers only, no
+        payload): name/extra/comment lengths are summed, records are counted,
+        and the walk stops as soon as either the declared count, the declared
+        directory size, or ``max_members`` is exceeded. Memory stays bounded
+        by ``max_members`` records regardless of what the archive contains.
         """
         with open(path, "rb") as handle:
             handle.seek(0, os.SEEK_END)
@@ -283,33 +288,54 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         if position == -1:
             return  # not a zip / truncated: ZipFile will raise its own error
         declared_entries = int.from_bytes(tail[position + 10 : position + 12], "little")
-        if declared_entries == 0xFFFF:  # ZIP64 sentinel: real count lives in the ZIP64 EOCD
+        is_zip64 = declared_entries == 0xFFFF
+        if is_zip64:  # ZIP64 sentinel: real values live in the ZIP64 EOCD
             z64 = tail.rfind(b"PK\x06\x06")
             if z64 != -1:
                 declared_entries = int.from_bytes(tail[z64 + 32 : z64 + 40], "little")
-        cd_size = int.from_bytes(tail[position + 12 : position + 16], "little")
-        cd_offset = int.from_bytes(tail[position + 16 : position + 20], "little")
+                cd_size = int.from_bytes(tail[z64 + 40 : z64 + 48], "little")
+                cd_offset = int.from_bytes(tail[z64 + 48 : z64 + 56], "little")
+            else:
+                cd_size = cd_offset = 0
+        else:
+            cd_size = int.from_bytes(tail[position + 12 : position + 16], "little")
+            cd_offset = int.from_bytes(tail[position + 16 : position + 20], "little")
         if declared_entries > limits.max_members:
             raise PackageLimitError(
                 "member_count",
                 f"package declares {declared_entries} entries in its central directory; max_members={limits.max_members}",
             )
-        # The declared count can also lie low while the central directory
-        # holds many more valid entries, so count actual central-directory
-        # headers inside a region bounded by the EOCD's own size field. The
-        # region is capped at what max_members entries could occupy (entries
-        # are at least 46 bytes each), keeping this pass O(max_members).
-        plausible = min(cd_size, limits.max_members * 4096)
-        if plausible > 0 and cd_offset < size:
-            with open(path, "rb") as handle:
-                handle.seek(cd_offset)
-                directory = handle.read(plausible)
-            counted = directory.count(b"PK\x01\x02")
-            if counted > limits.max_members:
-                raise PackageLimitError(
-                    "member_count",
-                    f"package central directory holds at least {counted} entries; max_members={limits.max_members}",
-                )
+        if cd_size == 0 or cd_offset >= size:
+            return
+        # Walk the real central-directory records: each header is at least 46
+        # bytes and carries its own name/extra/comment lengths. The declared
+        # count is never trusted — including a declared zero, which must not
+        # skip the walk while ZipFile would still parse entries by size — so
+        # records are visited until one fails to parse or the member cap is
+        # exceeded, whichever comes first.
+        walked = 0
+        with open(path, "rb") as handle:
+            handle.seek(cd_offset)
+            while True:
+                header = handle.read(46)
+                if len(header) < 46 or header[:4] != b"PK\x01\x02":
+                    break  # malformed/short directory: ZipFile will judge it
+                name_len = int.from_bytes(header[28:30], "little")
+                extra_len = int.from_bytes(header[30:32], "little")
+                comment_len = int.from_bytes(header[32:34], "little")
+                record_len = 46 + name_len + extra_len + comment_len
+                if record_len > 46 + 3 * 65535:  # impossible per spec: corrupt
+                    break
+                if handle.seek(record_len - 46, 1) > size:
+                    break
+                walked += 1
+                if walked > limits.max_members:
+                    break  # cap already exceeded; no need to count further
+        if walked > limits.max_members:
+            raise PackageLimitError(
+                "member_count",
+                f"package central directory holds at least {walked} entries; max_members={limits.max_members}",
+            )
 
     def _load_zip_file_contents_to_memory(self) -> None:
         """Open zip file and create a dictionary of file like objects by file_path.

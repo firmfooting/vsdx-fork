@@ -68,6 +68,84 @@ def test_diff_rejects_member_above_cap(tmp_path):
     assert excinfo.value.reason == "member_size"
 
 
+def test_zip64_low_count_with_real_directory_bounds_is_rejected(tmp_path):
+    """ZIP64 EOCD with a falsified low count and real directory bounds is caught.
+
+    Third-round review of #254: the preflight originally read only the ZIP64
+    entry count and bounded its scan with the classic size/offset fields —
+    which sit at 0xFFFFFFFF sentinels when ZIP64 is in play — so a low
+    falsified count ended the walk before the real directory was examined.
+    """
+    path = _copy("test1.vsdx", tmp_path)
+    with open(path, "rb") as handle:
+        payload = bytearray(handle.read())
+    eocd = payload.rfind(b"PK\x05\x06")
+    real_cd_size = int.from_bytes(payload[eocd + 12 : eocd + 16], "little")
+    real_cd_offset = int.from_bytes(payload[eocd + 16 : eocd + 20], "little")
+    payload[eocd + 10 : eocd + 12] = struct.pack("<H", 0xFFFF)  # sentinel count
+    payload[eocd + 12 : eocd + 16] = struct.pack("<I", 0xFFFFFFFF)  # sentinel size
+    payload[eocd + 16 : eocd + 20] = struct.pack("<I", 0xFFFFFFFF)  # sentinel offset
+    # ZIP64 EOCD inserted before the classic one: count lied low (5), real bounds
+    zip64_eocd = struct.pack(
+        "<IQHHIIQQQQ",
+        0x06064B50,  # signature
+        44,  # size of remainder of this record
+        45,  # version made by
+        45,  # version needed
+        0,  # this disk
+        0,  # directory start disk
+        14,  # entries on this disk
+        5,  # total entries: the lie
+        real_cd_size,
+        real_cd_offset,
+    )
+    payload = payload[:eocd] + zip64_eocd + payload[eocd:]
+    lying = os.path.join(str(tmp_path), "zip64-low-count.vsdx")
+    with open(lying, "wb") as handle:
+        handle.write(payload)
+
+    with pytest.raises(PackageLimitError) as excinfo:
+        VisioFile(lying, limits=vsdx.PackageLimits(max_members=10))
+    assert excinfo.value.reason == "member_count"
+
+
+def test_low_declared_count_with_swollen_directory_is_rejected(tmp_path):
+    """A low classic count cannot hide a directory holding more real entries."""
+    path = str(tmp_path / "many.vsdx")
+    with zipfile.ZipFile(path, "w") as archive:
+        for index in range(30):
+            archive.writestr(f"part{index}.xml", b"<x/>")
+    with open(path, "rb") as handle:
+        payload = bytearray(handle.read())
+    eocd = payload.rfind(b"PK\x05\x06")
+    payload[eocd + 10 : eocd + 12] = struct.pack("<H", 3)  # declared count lied low
+
+    with pytest.raises(PackageLimitError) as excinfo:
+        VisioFile(path, limits=vsdx.PackageLimits(max_members=20))
+    assert excinfo.value.reason == "member_count"
+
+
+def test_zero_declared_count_with_nonempty_directory_is_rejected(tmp_path):
+    """A declared zero count must not skip the walk while ZipFile parses by size.
+
+    Fourth-round review of #255: the preflight returned early on a zero
+    count, but ZipFile parses entries by central-directory size, restoring
+    the memory-exhaustion path the preflight exists to prevent.
+    """
+    path = str(tmp_path / "zero.vsdx")
+    with zipfile.ZipFile(path, "w") as archive:
+        for index in range(30):
+            archive.writestr(f"part{index}.xml", b"<x/>")
+    with open(path, "rb") as handle:
+        payload = bytearray(handle.read())
+    eocd = payload.rfind(b"PK\x05\x06")
+    payload[eocd + 10 : eocd + 12] = struct.pack("<H", 0)  # declared count zero
+
+    with pytest.raises(PackageLimitError) as excinfo:
+        VisioFile(path, limits=vsdx.PackageLimits(max_members=20))
+    assert excinfo.value.reason == "member_count"
+
+
 def test_eocd_preflight_reads_zip64_entry_count(tmp_path):
     """A ZIP64 EOCD sentinel (0xFFFF) must fall through to the 8-byte count."""
     path = _copy("test1.vsdx", tmp_path)
