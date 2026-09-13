@@ -164,29 +164,45 @@ class DataProperty:
 
     @property
     def value(self) -> str | None:
-        """Get the value of the data property"""
+        """Get the value of the data property, or None when it has none.
+
+        Reading is free of side effects: it neither creates the ``Value`` cell
+        nor tidies a ``No Formula`` formula, so inspecting a document does not
+        change the bytes it saves.
+        """
         value_cell = self.xml.find(f'{namespace}Cell[@N="Value"]')
-        value = None
-        if isinstance(value_cell, Element):
-            if value_cell.attrib.get("V") is not None:
-                value = value_cell.attrib.get("V")  # populate value from V attribute
-                if self.get_attribute("Value", "F") == "No Formula":
-                    self.remove_attribute("Value", "F")  # clean up 'No Formula' attribute if present
-                    self.set_attribute("Value", "U", "STR")  # set type to string
-            elif value_cell.text:
-                value = value_cell.text  # populate value from element inner text
-        return value
+        if not isinstance(value_cell, Element):
+            return None
+        if value_cell.attrib.get("V") is not None:
+            return value_cell.attrib.get("V")  # value from the V attribute
+        return value_cell.text or None  # or from the element's inner text
 
     @value.setter
     def value(self, value: float | str | None) -> None:
-        """Set the value of the data property"""
+        """Set the value of the data property, creating the cell if absent.
+
+        Writing is also where a placeholder ``No Formula`` formula is cleared:
+        leaving it beside a new value would make the cell disagree with itself,
+        and Visio may not show the value at all. Upstream dave-howard/vsdx#79.
+
+        The cell's declared unit is left alone. Stamping ``STR`` over it would
+        retype a date or numeric property as a string, and a cell created here
+        declares no unit rather than guessing one from the value.
+        """
+        text = "" if value is None else str(value)
         value_cell = self.xml.find(f'{namespace}Cell[@N="Value"]')
-        if isinstance(value_cell, Element):
-            text = "" if value is None else str(value)
-            if value_cell.attrib.get("V") is not None:
-                value_cell.attrib["V"] = text  # populate value in V attribute
-            elif value_cell.text:
-                value_cell.text = text  # populate value in element inner text
+        if not isinstance(value_cell, Element):
+            value_cell = Element(f"{namespace}Cell")
+            value_cell.attrib["N"] = "Value"
+            value_cell.attrib["V"] = text
+            self.xml.append(value_cell)
+            return
+        if value_cell.attrib.get("V") is None and value_cell.text:
+            value_cell.text = text  # this row carries its value as inner text
+        else:
+            value_cell.attrib["V"] = text
+        if value_cell.attrib.get("F") == "No Formula":
+            del value_cell.attrib["F"]
 
     def get_attribute(self, name: str, attrib: str) -> str | None:
         """Get the attribute value of the cell element"""
@@ -231,6 +247,7 @@ class Shape:
     cells: dict[str, Cell]
     geometry: vsdx.Geometry | None
     _data_properties: dict[str, DataProperty] | None
+    _data_properties_key: tuple[Element, ...] | None
 
     def __init__(self, xml: Element, parent: vsdx.Page | Shape, page: vsdx.Page):
         self.xml = xml
@@ -274,7 +291,8 @@ class Shape:
                         if cell.name is not None:
                             self.cells[f"Control/{row_type}/{cell.name}"] = cell
 
-        self._data_properties = None  # internal field to hold Shape.data_propertes, set by property
+        self._data_properties = None  # internal field to hold Shape.data_properties, set by property
+        self._data_properties_key = None  # the Property section state the cache was built from
 
     def __repr__(self):
         return f"<Shape tag={self.tag} ID={self.ID} is_master=({self.is_master_shape}) type={self.shape_type} text='{self.text}' >"
@@ -367,25 +385,41 @@ class Shape:
         Get data properties of the shape - which labels, names, and values
         returns a dictionary of DataProperty objects indexed by property label
 
+        The result is cached against this shape's own ``Property`` rows, so
+        adding, removing or replacing one is picked up on the next read. Two
+        limitations remain, both about inherited properties:
+
+        - A property inherited from a master is resolved when this shape is
+          first read. Editing the master afterwards is not reflected here,
+          because the master is re-resolved as a new object on every access and
+          folding it into the cache key would rebuild it on every call.
+        - An inherited ``DataProperty`` belongs to the master shape, so setting
+          its value writes to the master and changes every instance. Visio
+          creates a local override row on the instance instead; this library
+          does not yet.
+
         :return: Dict[str, DataProperty]
         """
-        if self._data_properties:
-            # return cached dict if present
+        properties_xml = self.xml.find(f'{namespace}Section[@N="Property"]')
+        property_rows: list[Element] = [] if properties_xml is None else properties_xml.findall(f"{namespace}Row")
+        # The rows themselves, by identity: a tuple of them costs no more to
+        # build than a count and also catches a row that was swapped for a
+        # different one, which leaves the count unchanged.
+        key = tuple(property_rows)
+        if self._data_properties is not None and self._data_properties_key == key:
             return self._data_properties
 
-        properties: dict[str, DataProperty] = {}
+        # a copy, so this shape's rows are never written into whatever dict the
+        # master hands back
         master = self.master_shape
-        if master is not None:  # start with master data properties or empty dict
-            properties = master.data_properties
-        properties_xml = self.xml.find(f'{namespace}Section[@N="Property"]')
-        if type(properties_xml) is Element:
-            property_rows = properties_xml.findall(f"{namespace}Row")
-            for prop in property_rows:
-                data_prop = DataProperty(xml=prop, shape=self)
-                # add properties to dict to allow fast lookup by property.label
-                # (a property row without a Label cell keys under "")
-                properties[data_prop.label or ""] = data_prop
+        properties: dict[str, DataProperty] = dict(master.data_properties) if master is not None else {}
+        for prop in property_rows:
+            data_prop = DataProperty(xml=prop, shape=self)
+            # add properties to dict to allow fast lookup by property.label
+            # (a property row without a Label cell keys under "")
+            properties[data_prop.label or ""] = data_prop
         self._data_properties = properties  # cache for next call
+        self._data_properties_key = key
         return properties
 
     def shape_value(self, name: str) -> str | None:
