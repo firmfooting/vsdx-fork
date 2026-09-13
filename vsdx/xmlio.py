@@ -5,7 +5,7 @@ from __future__ import annotations
 import io
 import threading
 import xml.etree.ElementTree as ET
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 
 # Prefixes Visio itself writes. ElementTree invents `ns0:`, `ns1:`, ... for any
@@ -127,7 +127,7 @@ def _prefix_table() -> dict[str, str]:
 
 
 @contextmanager
-def _serialising(root: ET.Element) -> Iterator[None]:
+def _serialising(root: ET.Element) -> Generator[None, None, None]:
     """Install this part's prefix map for the duration of one write.
 
     ElementTree resolves prefixes through a single module-level table, so a
