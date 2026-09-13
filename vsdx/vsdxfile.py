@@ -7,6 +7,7 @@ import json
 import math
 import os
 import posixpath
+import re
 import shutil
 import sys
 import tempfile
@@ -72,6 +73,29 @@ def _normalise_page_path(path: str) -> str:
 MACRO_ENABLED_CONTENT_TYPE = "application/vnd.ms-visio.drawing.macroEnabled.main+xml"
 DRAWING_CONTENT_TYPE = "application/vnd.ms-visio.drawing.main+xml"
 _SUFFIX_BY_CONTENT_TYPE = {MACRO_ENABLED_CONTENT_TYPE: ".vsdm", DRAWING_CONTENT_TYPE: ".vsdx"}
+
+# A ShapeSheet formula addresses another shape as `Sheet.5!Cell` or `Sheet5!Cell`.
+# Visio writes the dotted form in inherited cells and the undotted form in the
+# formulas it generates for connector glue -- `_XFTRIGGER(Sheet5!EventXFMod)`,
+# `PAR(PNT(Sheet5!Connections.X1,...))` -- where the reference is also nested
+# inside a function call rather than at the start of the formula.
+_SHEET_REFERENCE_RE = re.compile(r"\bSheet(\.?)(\d+)!")
+
+
+def _remap_sheet_references(formula: str, id_map: dict[str, int]) -> str:
+    """Rewrite the shape ids in a formula, keeping each reference's own form.
+
+    Ids absent from ``id_map`` address shapes outside the copied subtree (the
+    Swimlane List, for instance) and are left exactly as they are.
+    """
+
+    def replace(match: re.Match[str]) -> str:
+        separator, shape_id = match.group(1), match.group(2)
+        if shape_id not in id_map:
+            return match.group(0)
+        return f"Sheet{separator}{id_map[shape_id]}!"
+
+    return _SHEET_REFERENCE_RE.sub(replace, formula)
 
 
 class PackageLimitError(OSError):
@@ -1282,25 +1306,19 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         return max_id  # return new id for info
 
     def update_ids(self, shape: Element, id_map: dict[str, int]) -> Element:
-        # update: <ns0:Cell F="Sheet.15! replacing 15 with new id using prepopulated id_map
-        # cycle through shapes looking for Cell tag inside a Shape tag, which may be inside a Shapes tag
-        for e in shape.findall(f"{namespace}Shapes"):
-            self.update_ids(e, id_map)
-        for e in shape.findall(f"{namespace}Shape"):
-            # look for Cell elements
-            cells = e.findall(f"{namespace}Cell[@F]")
-            for cell in cells:
-                f = cell.attrib["F"]
-                if f.startswith("Sheet."):
-                    # update sheet refs with new ids; refs outside the cloned
-                    # subtree (e.g. to the Swimlane List) are not in id_map
-                    # and must be left untouched
-                    shape_id = f.split("!")[0].split(".")[1]
-                    if shape_id not in id_map:
-                        continue
-                    new_id = id_map[shape_id]
-                    new_f = f.replace(f"Sheet.{shape_id}", f"Sheet.{new_id}")
-                    cell.attrib["F"] = new_f
+        """Remap every sheet reference in a copied subtree through ``id_map``.
+
+        Covers the shape's own cells as well as its descendants', and cells
+        nested inside Sections, since a formula anywhere in the subtree may
+        address a shape whose id the copy has just changed.
+        """
+        for cell in shape.iter(f"{namespace}Cell"):
+            formula = cell.attrib.get("F")
+            if formula is None or "Sheet" not in formula:
+                continue
+            remapped = _remap_sheet_references(formula, id_map)
+            if remapped != formula:
+                cell.attrib["F"] = remapped
         return shape
 
     def close_vsdx(self) -> None:
