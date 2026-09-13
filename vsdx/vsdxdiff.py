@@ -156,7 +156,7 @@ class VisioFileDiff:
                         is_text = False  # incomplete multibyte sequence at EOF: binary, not text
                 if is_text:
                     if pending_cr:
-                        pending += "\r"
+                        pending += "\n"  # lone trailing CR normalises like the whole-payload path did
                     if pending:
                         lines.append(pending)
                     file_contents[member.filename] = lines

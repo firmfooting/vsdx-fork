@@ -287,11 +287,29 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
             z64 = tail.rfind(b"PK\x06\x06")
             if z64 != -1:
                 declared_entries = int.from_bytes(tail[z64 + 32 : z64 + 40], "little")
+        cd_size = int.from_bytes(tail[position + 12 : position + 16], "little")
+        cd_offset = int.from_bytes(tail[position + 16 : position + 20], "little")
         if declared_entries > limits.max_members:
             raise PackageLimitError(
                 "member_count",
                 f"package declares {declared_entries} entries in its central directory; max_members={limits.max_members}",
             )
+        # The declared count can also lie low while the central directory
+        # holds many more valid entries, so count actual central-directory
+        # headers inside a region bounded by the EOCD's own size field. The
+        # region is capped at what max_members entries could occupy (entries
+        # are at least 46 bytes each), keeping this pass O(max_members).
+        plausible = min(cd_size, limits.max_members * 4096)
+        if plausible > 0 and cd_offset < size:
+            with open(path, "rb") as handle:
+                handle.seek(cd_offset)
+                directory = handle.read(plausible)
+            counted = directory.count(b"PK\x01\x02")
+            if counted > limits.max_members:
+                raise PackageLimitError(
+                    "member_count",
+                    f"package central directory holds at least {counted} entries; max_members={limits.max_members}",
+                )
 
     def _load_zip_file_contents_to_memory(self) -> None:
         """Open zip file and create a dictionary of file like objects by file_path.
