@@ -305,13 +305,14 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
                 "member_count",
                 f"package declares {declared_entries} entries in its central directory; max_members={limits.max_members}",
             )
-        if declared_entries == 0 or cd_size == 0 or cd_offset >= size:
+        if cd_size == 0 or cd_offset >= size:
             return
         # Walk the real central-directory records: each header is at least 46
         # bytes and carries its own name/extra/comment lengths. The declared
-        # count is never trusted as a bound — a low falsified count would end
-        # the walk early — so records are visited until one fails to parse or
-        # the member cap is exceeded, whichever comes first.
+        # count is never trusted — including a declared zero, which must not
+        # skip the walk while ZipFile would still parse entries by size — so
+        # records are visited until one fails to parse or the member cap is
+        # exceeded, whichever comes first.
         walked = 0
         with open(path, "rb") as handle:
             handle.seek(cd_offset)

@@ -125,6 +125,27 @@ def test_low_declared_count_with_swollen_directory_is_rejected(tmp_path):
     assert excinfo.value.reason == "member_count"
 
 
+def test_zero_declared_count_with_nonempty_directory_is_rejected(tmp_path):
+    """A declared zero count must not skip the walk while ZipFile parses by size.
+
+    Fourth-round review of #255: the preflight returned early on a zero
+    count, but ZipFile parses entries by central-directory size, restoring
+    the memory-exhaustion path the preflight exists to prevent.
+    """
+    path = str(tmp_path / "zero.vsdx")
+    with zipfile.ZipFile(path, "w") as archive:
+        for index in range(30):
+            archive.writestr(f"part{index}.xml", b"<x/>")
+    with open(path, "rb") as handle:
+        payload = bytearray(handle.read())
+    eocd = payload.rfind(b"PK\x05\x06")
+    payload[eocd + 10 : eocd + 12] = struct.pack("<H", 0)  # declared count zero
+
+    with pytest.raises(PackageLimitError) as excinfo:
+        VisioFile(path, limits=vsdx.PackageLimits(max_members=20))
+    assert excinfo.value.reason == "member_count"
+
+
 def test_eocd_preflight_reads_zip64_entry_count(tmp_path):
     """A ZIP64 EOCD sentinel (0xFFFF) must fall through to the 8-byte count."""
     path = _copy("test1.vsdx", tmp_path)
