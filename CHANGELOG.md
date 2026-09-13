@@ -82,6 +82,18 @@ available at <https://github.com/dave-howard/vsdx>.
 
 ### Fixed
 
+- Reading Shape Data no longer changes the document. `DataProperty.value`'s
+  getter used to clear a `No Formula` formula and stamp a `STR` unit while
+  reading, so merely inspecting a shape's properties altered the bytes the
+  package saved. The tidy-up now happens on write, where it belongs, and the
+  setter creates the `Value` cell when the row has none instead of silently
+  doing nothing (upstream dave-howard/vsdx#79).
+- `Shape.data_properties` no longer serves a stale cache after a `Property` row
+  is added, removed or replaced; the cache is keyed on the rows themselves. It
+  also copies the master's dictionary rather than merging into it in place.
+  Inherited properties are still resolved once per shape, so a change made to a
+  master *after* an instance's properties have been read is not picked up until
+  that instance's own rows change.
 - Connector record removal normalises integer IDs before matching XML attributes,
   preserving the existing public-call behaviour.
 - Shape and connector coordinate setters reject `None` instead of writing
