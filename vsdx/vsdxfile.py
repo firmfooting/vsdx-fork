@@ -80,16 +80,17 @@ class PackageLimits:
     """Conservative caps applied while loading a package from disk.
 
     The defaults suit documents from unknown sources: a hostile or accidental
-    archive is rejected before it can exhaust process memory. Trusted callers
-    holding their own documents can relax the caps via
-    ``VisioFile(filename, limits=PackageLimits(...))`` or a JSON file passed
-    as ``limits_path`` with the same keys.
+    archive is rejected well before it can exhaust process memory. Even at the
+    caps the loader materialises at most ``max_total_uncompressed`` bytes
+    (256 MiB by default); callers loading larger trusted documents should raise
+    the caps explicitly via ``VisioFile(filename, limits=PackageLimits(...))``
+    or a JSON file passed as ``limits_path`` with the same keys.
     """
 
-    max_members: int = 4096
-    max_member_size: int = 512 * 1024 * 1024
-    max_total_uncompressed: int = 2 * 1024 * 1024 * 1024
-    max_ratio: float = 200.0
+    max_members: int = 512
+    max_member_size: int = 64 * 1024 * 1024
+    max_total_uncompressed: int = 256 * 1024 * 1024
+    max_ratio: float = 100.0
 
     def __post_init__(self) -> None:
         if not math.isfinite(float(self.max_ratio)):
@@ -260,14 +261,45 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
             return minidom.parseString(ET.tostring(require_element(xml.getroot(), "element"))).toprettyxml()
         return minidom.parseString(ET.tostring(xml)).toprettyxml()
 
+    @staticmethod
+    def _preflight_eocd(path: str, limits: PackageLimits) -> None:
+        """Check the archive's declared entry count before ZipFile parses it.
+
+        Issue #20 review: the ``ZipFile`` constructor reads the whole central
+        directory and builds a ``ZipInfo`` per entry before any of our checks
+        run, so a crafted archive with millions of tiny entries costs memory
+        proportional to its entry count first. The end-of-central-directory
+        record declares the entry count; read it raw and enforce the cap
+        before handing the file to ``ZipFile``.
+        """
+        with open(path, "rb") as handle:
+            handle.seek(0, os.SEEK_END)
+            size = handle.tell()
+            window = min(size, 65536 + 22)  # EOCD comment is at most 64 KiB
+            handle.seek(size - window)
+            tail = handle.read()
+        signature = b"PK\x05\x06"
+        position = tail.rfind(signature)
+        if position == -1:
+            return  # not a zip / truncated: ZipFile will raise its own error
+        declared_entries = int.from_bytes(tail[position + 10 : position + 12], "little")
+        if declared_entries > limits.max_members:
+            raise PackageLimitError(
+                "member_count",
+                f"package declares {declared_entries} entries in its central directory; max_members={limits.max_members}",
+            )
+
     def _load_zip_file_contents_to_memory(self) -> None:
         """Open zip file and create a dictionary of file like objects by file_path.
 
-        ZipInfo metadata is checked against ``self.limits`` before any member
-        body is read; reads then stream through a byte counter so the bound
-        holds even if the archive's metadata disagrees with its contents.
+        The end-of-central-directory entry count is checked before ``ZipFile``
+        parses the central directory, ZipInfo metadata is checked against
+        ``self.limits`` before any member body is read, and reads stream
+        through a byte counter so the bound holds even if the archive's
+        metadata disagrees with its contents.
         """
         limits = self.limits
+        self._preflight_eocd(self.filename, limits)
         with zipfile.ZipFile(self.filename, "r") as zip_ref:
             infos = zip_ref.infolist()
             if len(infos) > limits.max_members:
