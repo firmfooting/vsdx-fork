@@ -40,6 +40,12 @@ available at <https://github.com/dave-howard/vsdx>.
   completeness gate (`tools/check_public_annotations.py`) and a Mypy consumer
   fixture (`tests/type_fixture.py`, run with `--disallow-untyped-calls`) keep
   the advertised typed contract checker-independent.
+- Page removal now deletes the page's relationship from `pages.xml.rels`, its
+  `[Content_Types].xml` override and its page-rels part alongside the page part,
+  so the OPC graph stays consistent. New pages allocate part names and
+  relationship IDs from unused values instead of page count (removing a page
+  then adding one no longer targets a colliding `pageN.xml`), and the returned
+  `Page` carries its real page ID and relationship ID immediately.
 - Typed contracts for shapes, pages, connectors, geometry, containers,
   templating, media and XML/package persistence.
 - Shared required-XML helpers that report the missing package part rather than
