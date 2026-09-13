@@ -61,12 +61,17 @@ def _coordinate_value(value: float | str | None) -> str:
     return xml_value(value)
 
 
-master_re = re.compile(
-    r"^(?P<prefix>(?:<ns0:[cp].+?\/>)*)"
-    r"(?P<content>.*?)"
-    r"(?P<suffix>(?:<ns0:[cp].+?\/>)*\n*)$",
-    re.DOTALL,
-)
+# Visio brackets a shape's text with character (`cp`) and paragraph (`pp`)
+# formatting runs. Editing the text has to leave those runs in place, so they
+# are located by walking the Text element's children: the serialised form they
+# take depends on which namespace prefix is in force, and matching it as text
+# is what tied the old implementation to ElementTree's `ns0:` prefix.
+_TEXT_RUN_TAGS = frozenset({f"{namespace}cp", f"{namespace}pp"})
+
+
+def _is_formatting_run(element: Element) -> bool:
+    """True for a self-closing character/paragraph formatting element."""
+    return element.tag in _TEXT_RUN_TAGS and len(element) == 0 and not element.text
 
 
 class Cell:
@@ -797,38 +802,80 @@ class Shape:
                 return master.text  # get text from master shape
         return ""
 
-    @property
-    def _text_master_tag_groupdict(self) -> dict[str, str]:
-        match = master_re.match(self.text_raw)
-        if match is None:  # the pattern is anchored and always matches; safety net
-            return {"prefix": "", "content": self.text_raw, "suffix": ""}
-        return match.groupdict()
+    def _text_runs(self) -> tuple[list[Element], str, list[Element], str]:
+        """Split the shape's text into leading runs, content, trailing runs and trailing newlines.
 
-    @property
-    def _text_master_tag_pre(self) -> str:
-        return self._text_master_tag_groupdict["prefix"]
+        The leading and trailing runs are the Text element's own child
+        elements, not copies, so a caller may re-append them after clearing it.
+        Visio ends a Text element with a newline that is not part of the text;
+        it is reported separately so that setting the text puts it back.
+        """
+        text_element = self.xml.find(f"{namespace}Text")
+        if not isinstance(text_element, Element):
+            # A shape with no Text element of its own shows its master's text,
+            # and inherits none of the master's formatting runs.
+            if self.master_page_ID:
+                master = self.master_shape
+                if master is not None and master.text:
+                    return [], master.text, [], ""
+            return [], "", [], ""
 
-    @property
-    def _text_master_tag_post(self) -> str:
-        return self._text_master_tag_groupdict["suffix"]
+        children = list(text_element)
+        start = 0
+        if not text_element.text:
+            while start < len(children) and _is_formatting_run(children[start]):
+                start += 1
+                if children[start - 1].tail:
+                    break  # this run's trailing text is where the content starts
+
+        end = len(children)
+        while end > start:
+            candidate = children[end - 1]
+            tail = candidate.tail or ""
+            if not _is_formatting_run(candidate):
+                break
+            # only whitespace may follow the final run; nothing at all may sit
+            # between two runs, or the text before it belongs to the content
+            if tail.strip() if end == len(children) else tail:
+                break
+            end -= 1
+
+        leading = (text_element.text if start == 0 else children[start - 1].tail) or ""
+        content = leading + "".join(html.unescape(ET.tostring(child, encoding="unicode")) for child in children[start:end])
+        suffix = children[end:]
+        trailing = ""
+        if not suffix:
+            # nothing follows the content, so a newline at its end is Visio's
+            # terminator rather than text; a trailing run keeps its own tail
+            stripped = content.rstrip("\n")
+            content, trailing = stripped, content[len(stripped) :]
+        return children[:start], content, suffix, trailing
 
     @property
     def text(self) -> str:
-        return self._text_master_tag_groupdict["content"]
+        return self._text_runs()[1]
 
     @text.setter
     def text(self, value: str) -> None:
-        _value = self._text_master_tag_pre + value + self._text_master_tag_post
+        prefix, _, suffix, trailing = self._text_runs()
+        value += trailing
         tag = f"{namespace}Text"
         text_element = self.xml.find(tag)
         if not isinstance(text_element, Element):  # create Text element if not found
             text_element = Element(tag)
             self.xml.append(text_element)
-        wrapper = ET.fromstring(f"<wrapper>{_value}</wrapper>")
+        attrib = dict(text_element.attrib)  # e.g. xml:space="preserve"
         text_element.clear()
-        text_element.text = wrapper.text
-        for child in wrapper:
-            text_element.append(child)
+        text_element.attrib.update(attrib)
+        for run in prefix:
+            run.tail = None
+            text_element.append(run)
+        if prefix:
+            prefix[-1].tail = value
+        else:
+            text_element.text = value
+        for run in suffix:
+            text_element.append(run)
 
     @deprecation.deprecated(
         deprecated_in="0.5.0",
