@@ -113,6 +113,18 @@ available at <https://github.com/dave-howard/vsdx>.
 
 ### Changed
 
+- `save_vsdx` now keeps the saved extension in step with the package kind. The
+  kind comes from the content type of `visio/document.xml`, not the filename, so
+  saving a macro-enabled package to a `.vsdx` destination — or a plain drawing to
+  a `.vsdm` one — raises `ValueError` instead of writing a package whose
+  extension and `[Content_Types].xml` disagree, which Visio reports as corrupt.
+  The same check applies to an in-place `save_vsdx()` on a file that was renamed
+  outside the library; it refuses rather than renaming the caller's path. A
+  destination carrying neither Visio extension still gets the matching one
+  appended, which for a macro-enabled package is now `.vsdm` rather than `.vsdx`.
+  Callers relying on the old silent `.vsdx` suffix for `.vsdm` documents will see
+  the new exception. The new `VisioFile.is_macro_enabled` property exposes the
+  same determination.
 - The documentation toolchain moved from the published `docs` extra to a PEP 735
   `docs` dependency group carrying its own `requires-python` floor, so Sphinx can
   track releases that need a newer interpreter than `vsdxkit` itself. Sphinx is

@@ -31,13 +31,17 @@ Format support
 
 * Python 3.10–3.14 on Linux and Windows
 * read, edit and save ``.vsdx``
-* read-only support for ``.vsdm``
+* read, edit and save ``.vsdm``, which must stay ``.vsdm``
 * no Microsoft Visio dependency at runtime
 * generated connectors and swimlanes checked against real Visio through COM
 
 The library starts from an existing package. It does not construct a complete
-Visio document from an empty file, and it does not create or save macro-enabled
-``.vsdm`` documents.
+Visio document from an empty file. A macro-enabled ``.vsdm`` can be edited and
+saved, but only back to a ``.vsdm`` destination: the package kind is decided by
+the content type of ``visio/document.xml``, not by the filename, so saving one
+as ``.vsdx`` (or a plain drawing as ``.vsdm``) raises ``ValueError`` rather than
+writing a file Visio reports as corrupt. Stripping macros to convert a ``.vsdm``
+into a ``.vsdx`` is not supported.
 
 Project
 -------

@@ -168,7 +168,7 @@ The package also supports its existing group-shape loop and `showif` conventions
 ## Limits
 
 - The library starts from an existing `.vsdx`; it does not create a complete Visio document package from nothing.
-- `.vsdm` files can be read, but creating or saving macro-enabled documents is not supported.
+- `.vsdm` files can be read and saved, but only back to a `.vsdm` destination. The package kind is decided by the content type of `visio/document.xml`, not by the filename, so `save_vsdx()` refuses a `.vsdx` destination for a macro-enabled package and a `.vsdm` destination for one that is not — either would produce a file whose extension and `[Content_Types].xml` disagree, which Visio reports as corrupt. Stripping macros to convert a `.vsdm` into a `.vsdx` is not supported. A destination with no extension, or with an unrelated one, gets the matching Visio extension appended.
 - Swimlane creation works on existing Visio CFF diagrams. It does not convert an ordinary page into a CFF diagram.
 - Visio may recalculate layout when a generated file opens. The library writes the glue and route cells but does not reproduce Visio's entire layout engine.
 - Loading enforces package expansion limits before any archive member is read: at most 512 members, 64 MiB per member, 256 MiB total uncompressed, and a 100:1 compression ratio, plus rejection of duplicate and path-unsafe member names. A hostile or accidental archive is refused with `vsdx.PackageLimitError` instead of exhausting process memory. The defaults suit documents from unknown sources; trusted callers can relax the caps with `VisioFile(filename, limits=PackageLimits(...))` or `limits_path="vsdx.limits.json"` (same keys, JSON object).
