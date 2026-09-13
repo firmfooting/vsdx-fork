@@ -19,6 +19,19 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+
+def __getattr__(name: str):
+    # Module-level lazy attribute (PEP 562): typing.get_type_hints on the
+    # quoted 'Connect' annotation resolves through module globals, and
+    # vsdx.connectors imports this module, so the reference is provided on
+    # demand instead of at import time (which would be a cycle).
+    if name == "Connect":
+        from vsdx.connectors import Connect
+
+        return Connect
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 shape_type_names = {  # a map from English language shape to a list of know names for that Shape type
     # note that Shape names may be appended with a number e.g. 'Dynamischer Verbinder.2'
     "Dynamic Connector": ["dynamic connector", "dynamischer verbinder"]
@@ -982,7 +995,12 @@ class Shape:
 
     @property
     def connects(self) -> list[Connect]:
-        # get list of connect items linking shapes
+        """Connect items linking this shape to others.
+
+        The annotation quotes ``Connect`` so ``typing.get_type_hints`` stays
+        runtime-resolvable while avoiding an import cycle with
+        ``vsdx.connectors`` (resolved lazily by the type checker).
+        """
         connects = list()
         for c in self.page.connects:
             if self.ID in [c.shape_id, c.connector_shape_id]:

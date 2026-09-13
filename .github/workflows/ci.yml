@@ -89,6 +89,8 @@ jobs:
         run: uv run --no-sync ruff format --check vsdx tests
       - name: pyrefly strict
         run: uv run --no-sync pyrefly check vsdx --min-severity warn --output-format min-text
+      - name: Verify action pin annotations
+        run: uv run --no-sync python tools/check_action_pins.py
       - name: Public type-completeness gate
         run: uv run --no-sync python tools/check_public_annotations.py
       - name: Mypy consumer fixture

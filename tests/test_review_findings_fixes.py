@@ -1,0 +1,142 @@
+"""Tests for findings from reviews of merged PRs (fix pass, September 2026)."""
+
+import os
+import struct
+import zipfile
+
+import pytest
+
+import vsdx
+from vsdx import PackageLimitError, VisioFile
+from vsdx.vsdxdiff import VisioFileDiff
+
+basedir = os.path.dirname(os.path.realpath(__file__))
+
+
+def _make_vsdx(path: str, members: dict[str, bytes]) -> None:
+    """Build a minimal archive; VisioFileDiff treats any zip as readable."""
+    with zipfile.ZipFile(path, "w") as archive:
+        for name, payload in members.items():
+            archive.writestr(name, payload)
+
+
+def _copy(name: str, tmp_path) -> str:
+    source = os.path.join(basedir, name)
+    destination = os.path.join(str(tmp_path), name)
+    with open(source, "rb") as reader, open(destination, "wb") as writer:
+        writer.write(reader.read())
+    return destination
+
+
+def test_eocd_preflight_rejects_declared_entry_overflow(tmp_path):
+    """An EOCD declaring more entries than max_members is rejected before ZipFile runs."""
+    path = _copy("test1.vsdx", tmp_path)
+    limits = vsdx.PackageLimits(max_members=20)
+    VisioFile._preflight_eocd(path, limits)  # real fixture declares 14 < 20: passes
+
+    with open(path, "rb") as handle:
+        payload = bytearray(handle.read())
+    eocd = payload.rfind(b"PK\x05\x06")
+    assert eocd != -1
+    payload[eocd + 10 : eocd + 12] = struct.pack("<H", 50_000)
+    lying = os.path.join(str(tmp_path), "lying.vsdx")
+    with open(lying, "wb") as handle:
+        handle.write(payload)
+
+    with pytest.raises(PackageLimitError) as excinfo:
+        VisioFile(lying, limits=limits)
+    assert excinfo.value.reason == "member_count"
+
+
+def test_diff_rejects_member_above_cap(tmp_path):
+    """A member declaring more than the diff cap is refused, not inflated."""
+    document = str(tmp_path / "big.vsdx")
+    with zipfile.ZipFile(document, "w") as archive:
+        archive.writestr("visio/pages/pages.xml", b"<xml/>")
+
+    # lie about the member's declared uncompressed size in the central directory
+    with open(document, "rb") as reader:
+        payload = bytearray(reader.read())
+    cd = payload.find(b"PK\x01\x02")
+    struct.pack_into("<I", payload, cd + 24, VisioFileDiff.MAX_MEMBER_BYTES + 1)
+    over = os.path.join(str(tmp_path), "over.vsdx")
+    with open(over, "wb") as handle:
+        handle.write(payload)
+
+    with pytest.raises(PackageLimitError) as excinfo:
+        VisioFileDiff.extract_file_data(over)
+    assert excinfo.value.reason == "member_size"
+
+
+def test_eocd_preflight_reads_zip64_entry_count(tmp_path):
+    """A ZIP64 EOCD sentinel (0xFFFF) must fall through to the 8-byte count."""
+    path = _copy("test1.vsdx", tmp_path)
+    limits = vsdx.PackageLimits(max_members=20)
+    VisioFile._preflight_eocd(path, limits)
+
+    with open(path, "rb") as handle:
+        payload = bytearray(handle.read())
+    eocd = payload.rfind(b"PK\x05\x06")
+    # classic field holds the sentinel; append a ZIP64 EOCD declaring 40,000
+    payload[eocd + 10 : eocd + 12] = struct.pack("<H", 0xFFFF)
+    zip64_eocd = struct.pack(
+        "<IQHHIIQQQQ",
+        0x06064B50,  # signature
+        44,  # size of remainder of this record
+        45,  # version made by
+        45,  # version needed
+        0,  # this disk
+        0,  # directory start disk
+        14,  # entries on this disk (real fixture count)
+        40000,  # total entries: the lie the classic field hides
+        0,
+        0,
+    )
+    payload = zip64_eocd + payload
+    lying = os.path.join(str(tmp_path), "zip64-lying.vsdx")
+    with open(lying, "wb") as handle:
+        handle.write(payload)
+
+    with pytest.raises(PackageLimitError) as excinfo:
+        VisioFile(lying, limits=limits)
+    assert excinfo.value.reason == "member_count"
+    assert "40000" in str(excinfo.value)
+
+
+def test_get_type_hints_resolves_connect_to_class():
+    """get_type_hints must resolve the quoted annotation to the real class."""
+    import typing
+
+    from vsdx.connectors import Connect
+    from vsdx.shapes import Shape
+
+    hints = typing.get_type_hints(Shape.connects.fget)
+    assert hints["return"].__args__[0] is Connect
+
+
+def test_diff_chunk_boundary_crlf_is_one_newline(tmp_path):
+    """A CRLF pair split across the 1 MiB chunk boundary must not double-count."""
+
+    document = str(tmp_path / "split.vsdx")
+    other = str(tmp_path / "plain.vsdx")
+    payload = b"<xml>" + b" " * (VisioFileDiff._CHUNK - 1) + b"\r\n</xml>"
+    _make_vsdx(document, {"visio/document.xml": payload})
+    _make_vsdx(other, {"visio/document.xml": b"<xml>" + b" " * (VisioFileDiff._CHUNK - 1) + b"\n</xml>"})
+
+    file_diff = VisioFileDiff(document, other)
+    assert file_diff.diffs == {}
+    # and the split line count matches a plain-LF document exactly
+    assert file_diff.contents_a == file_diff.contents_b
+
+
+def test_diff_incomplete_utf8_at_eof_is_binary(tmp_path):
+    """A member ending in an incomplete multibyte sequence hashes as binary."""
+    document = str(tmp_path / "truncated.vsdx")
+    other = str(tmp_path / "truncated2.vsdx")
+    _make_vsdx(document, {"custom/binary.dat": b"\xff\xfe\xc3"})  # trailing partial sequence
+    _make_vsdx(other, {"custom/binary.dat": b"\xff\xfe\xc4"})
+
+    file_diff = VisioFileDiff(document, other)
+    assert "custom/binary.dat" in file_diff.diffs
+    assert file_diff.contents_a["custom/binary.dat"][0].startswith("binary sha256:")
+    assert file_diff.contents_a["custom/binary.dat"] != file_diff.contents_b["custom/binary.dat"]

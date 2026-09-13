@@ -1,8 +1,10 @@
+import codecs
 import difflib
 import hashlib
 import zipfile
 
 from .logging_support import get_logger
+from .vsdxfile import PackageLimitError
 
 logger = get_logger(__name__)
 
@@ -85,6 +87,13 @@ class VisioFileDiff:
         members_b = set(self.contents_b.keys())
         return members_a - members_b
 
+    # Diff-time safety caps (issue #8 review): a diff must not inflate a
+    # compression bomb into memory. Text members are decoded incrementally
+    # with a hard cap; binary members are hashed incrementally.
+    MAX_MEMBER_BYTES = 256 * 1024 * 1024
+    MAX_TOTAL_BYTES = 1024 * 1024 * 1024
+    _CHUNK = 1024 * 1024
+
     @staticmethod
     def extract_file_data(file_path: str) -> dict[str, list[str]]:
         """Read archive members in-memory; nothing is written beside the source.
@@ -93,23 +102,65 @@ class VisioFileDiff:
         space, so no extraction or recursive delete happens (issue #8).
         Undecodable members become a ``binary sha256:<digest>`` line so two
         different binaries compare as changed instead of collapsing into the
-        same placeholder.
+        same placeholder. Members stream in chunks with per-member and total
+        byte caps, so a compression bomb cannot exhaust memory through this
+        path (issue #8 review).
         """
         file_contents: dict[str, list[str]] = {}
+        total_read = 0
         with zipfile.ZipFile(file_path, "r") as zip_ref:
             for member in zip_ref.infolist():
                 if member.filename.endswith("/"):
                     continue
-                payload = zip_ref.read(member.filename)
-                try:
-                    # universal-newline translation, matching the previous
-                    # text-mode readlines() so CRLF-vs-LF packaging differences
-                    # are not reported as content changes
-                    text = payload.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
-                except UnicodeDecodeError:
-                    digest = hashlib.sha256(payload).hexdigest()
-                    file_contents[member.filename] = [f"binary sha256:{digest}"]
+                if member.file_size > VisioFileDiff.MAX_MEMBER_BYTES:
+                    raise PackageLimitError(
+                        "member_size",
+                        f"package member '{member.filename}' declares {member.file_size} bytes;"
+                        f" max_member_size={VisioFileDiff.MAX_MEMBER_BYTES}",
+                    )
+                total_read += member.file_size
+                if total_read > VisioFileDiff.MAX_TOTAL_BYTES:
+                    raise PackageLimitError(
+                        "total_size",
+                        f"package declares more than {VisioFileDiff.MAX_TOTAL_BYTES} uncompressed bytes across members",
+                    )
+                decoder = codecs.getincrementaldecoder("utf-8")()
+                digest = hashlib.sha256()
+                lines: list[str] = []
+                pending = ""
+                pending_cr = False  # a '\r' at chunk end may pair with '\n' next chunk
+                is_text = True
+                with zip_ref.open(member, "r") as stream:
+                    while chunk := stream.read(VisioFileDiff._CHUNK):
+                        digest.update(chunk)
+                        if not is_text:
+                            continue
+                        try:
+                            text = decoder.decode(chunk)
+                        except UnicodeDecodeError:
+                            is_text = False
+                            continue
+                        if pending_cr:
+                            text = "\r" + text
+                            pending_cr = False
+                        if text.endswith("\r"):
+                            text = text[:-1]
+                            pending_cr = True  # decide CRLF-vs-CR only when the next chunk arrives
+                        pending += text
+                        *complete, pending = pending.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+                        lines.extend(line + "\n" for line in complete)
+                if is_text:
+                    try:
+                        pending += decoder.decode(b"", final=True)
+                    except UnicodeDecodeError:
+                        is_text = False  # incomplete multibyte sequence at EOF: binary, not text
+                if is_text:
+                    if pending_cr:
+                        pending += "\n"  # lone trailing CR normalises like the whole-payload path did
+                    if pending:
+                        lines.append(pending)
+                    file_contents[member.filename] = lines
+                else:
+                    file_contents[member.filename] = [f"binary sha256:{digest.hexdigest()}"]
                     logger.debug("member %s is not decodable text; compared by digest", member.filename)
-                    continue
-                file_contents[member.filename] = text.splitlines(keepends=True)
         return file_contents

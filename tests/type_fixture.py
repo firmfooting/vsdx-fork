@@ -31,6 +31,11 @@ def connector_endpoint(connect: Connect) -> str | None:
     return connect.shape_id
 
 
+def shape_connects(shape: Shape) -> list[Connect]:
+    # the quoted 'Connect' annotation must resolve for Mypy consumers too
+    return shape.connects
+
+
 def relaxed_limits() -> PackageLimits:
     return PackageLimits(max_members=16, max_member_size=1_048_576)
 

@@ -27,6 +27,11 @@ def pretty_print_element(xml: Element | ET.ElementTree) -> str:
 
 __version__ = "0.6.3"
 
+# Issue #250/#254 review: `Shape.connects` quotes `Connect` in its annotation,
+# and `typing.get_type_hints` evaluates quoted names against the function's
+# module __dict__ (module __getattr__ is not consulted). Inject the real class
+# here, once both modules are fully initialised, so runtime introspection works.
+from . import shapes as _shapes_module  # noqa: E402
 from .connectors import Connect  # noqa: E402
 from .containers import Container  # noqa: E402
 from .formulae import calc_value  # noqa: E402
@@ -36,6 +41,8 @@ from .media import Media  # noqa: E402
 from .pages import Page, PagePosition  # noqa: E402
 from .shapes import Cell, DataProperty, Shape  # noqa: E402
 from .vsdxfile import PackageLimitError, PackageLimits, VisioFile, VisioFileNotOpen  # noqa: E402
+
+_shapes_module.Connect = Connect
 
 __all__ = [
     "Cell",

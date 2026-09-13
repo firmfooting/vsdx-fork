@@ -40,6 +40,15 @@ available at <https://github.com/dave-howard/vsdx>.
   completeness gate (`tools/check_public_annotations.py`) and a Mypy consumer
   fixture (`tests/type_fixture.py`, run with `--disallow-untyped-calls`) keep
   the advertised typed contract checker-independent.
+- Review-fix pass on merged PRs: the default `PackageLimits` are lowered to
+  512 members, 64 MiB per member, 256 MiB total uncompressed and a 100:1
+  ratio, so even at the caps loading materialises at most 256 MiB; the
+  archive's declared entry count is checked against `max_members` before
+  `ZipFile` parses the central directory; `Shape.connects`' `Connect`
+  annotation is runtime-resolvable for `typing.get_type_hints` consumers; and
+  `VisioFileDiff` streams members through a capped incremental decoder and
+  hash instead of inflating each member wholesale. The action-pin drift
+  checker is wired into CI.
 - Page removal now deletes the page's relationship from `pages.xml.rels`, its
   `[Content_Types].xml` override and its page-rels part alongside the page part,
   so the OPC graph stays consistent. New pages allocate part names and
