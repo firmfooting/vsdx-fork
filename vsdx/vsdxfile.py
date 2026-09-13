@@ -41,14 +41,17 @@ from .masters import MastersImportMixin  # noqa: E402
 from .pages import Page, PagePosition  # noqa: E402
 from .shapes import Shape  # noqa: E402
 from .templating import JinjaTemplatingMixin  # noqa: E402
-from .xmlio import file_to_xml, require_element, require_root, require_tree, require_xml_tree, xml_to_file  # noqa: E402
+from .xmlio import (  # noqa: E402
+    file_to_xml,
+    register_namespaces,
+    require_element,
+    require_root,
+    require_tree,
+    require_xml_tree,
+    xml_to_file,
+)
 
-ET.register_namespace("", namespace[1:-1])
-ET.register_namespace("", ext_prop_namespace[1:-1])
-ET.register_namespace("vt", vt_namespace[1:-1])
-ET.register_namespace("r", r_namespace[1:-1])
-ET.register_namespace("", document_rels_namespace[1:-1])
-ET.register_namespace("", cont_types_namespace[1:-1])
+register_namespaces()
 
 
 def _page_relationship_path(rel_dir: str, page_path: str) -> str:

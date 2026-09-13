@@ -66,6 +66,33 @@ jobs:
       - name: Test
         run: uv run --no-sync python -m pytest tests -q
 
+  libreoffice-interop:
+    # libvisio (LibreOffice's Visio importer) is stricter about namespace
+    # prefixes than Visio is, so converting a package this library wrote is the
+    # end-to-end check that its parts are still readable elsewhere.
+    name: LibreOffice import
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      UV_PYTHON: '3.12'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4  # v10.1.0
+        with:
+          enable-cache: false
+          version: "0.12.7"
+      - name: Install LibreOffice Draw
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y libreoffice-draw
+      - name: Install
+        run: uv sync --locked --no-default-groups --group test
+      - name: Convert library output to PDF
+        run: uv run --no-sync python -m pytest tests/test_interop_libreoffice.py -q
+
   lint:
     name: ruff + pyrefly
     runs-on: ubuntu-latest
