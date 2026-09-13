@@ -268,14 +268,16 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         Issue #20 review: the ``ZipFile`` constructor reads the whole central
         directory and builds a ``ZipInfo`` per entry before any of our checks
         run, so a crafted archive with millions of tiny entries costs memory
-        proportional to its entry count first. The end-of-central-directory
-        record is read raw and its declared count enforced, then — because
-        every one of those fields is attacker-controlled — the actual
-        central-directory records are parsed sequentially (headers only, no
-        payload): name/extra/comment lengths are summed, records are counted,
-        and the walk stops as soon as either the declared count, the declared
-        directory size, or ``max_members`` is exceeded. Memory stays bounded
-        by ``max_members`` records regardless of what the archive contains.
+        proportional to its entry count first.
+
+        Every EOCD/Z64 field is attacker-controlled and ``ZipFile`` reserves
+        the right to reinterpret them, so this preflight derives the
+        central-directory start the same way ``ZipFile`` does — from the EOCD
+        locator's own file position minus the declared directory size — and
+        then walks the real records (headers only, no payload) until one
+        fails to parse, the declared directory is exhausted, or the member
+        cap is exceeded. A falsified count, offset, or ZIP64 sentinel cannot
+        hide entries from the walk.
         """
         with open(path, "rb") as handle:
             handle.seek(0, os.SEEK_END)
@@ -287,36 +289,52 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         position = tail.rfind(signature)
         if position == -1:
             return  # not a zip / truncated: ZipFile will raise its own error
+        eocd_file_position = size - window + position  # absolute offset of the EOCD record
         declared_entries = int.from_bytes(tail[position + 10 : position + 12], "little")
-        is_zip64 = declared_entries == 0xFFFF
-        if is_zip64:  # ZIP64 sentinel: real values live in the ZIP64 EOCD
-            z64 = tail.rfind(b"PK\x06\x06")
-            if z64 != -1:
-                declared_entries = int.from_bytes(tail[z64 + 32 : z64 + 40], "little")
-                cd_size = int.from_bytes(tail[z64 + 40 : z64 + 48], "little")
-                cd_offset = int.from_bytes(tail[z64 + 48 : z64 + 56], "little")
-            else:
-                cd_size = cd_offset = 0
-        else:
-            cd_size = int.from_bytes(tail[position + 12 : position + 16], "little")
-            cd_offset = int.from_bytes(tail[position + 16 : position + 20], "little")
+        cd_size = int.from_bytes(tail[position + 12 : position + 16], "little")
+        # note: the classic cd_offset field is deliberately not read — the
+        # walk derives its start from the EOCD's own file position, matching
+        # zipfile's concat adjustment, so a falsified offset cannot misdirect
+        # the scan away from the records ZipFile will parse.
+
+        # Detect ZIP64 by its locator (PK\x06\x07), exactly as zipfile does:
+        # the locator may exist regardless of the classic count, and when the
+        # ZIP64 EOCD is found it replaces all classic values.
+        locator = tail.rfind(b"PK\x06\x07")
+        if locator != -1:
+            z64_offset = int.from_bytes(tail[locator + 8 : locator + 16], "little")
+            z64_tail_position = z64_offset - (size - window)
+            if 0 <= z64_tail_position <= len(tail) - 56 and tail[z64_tail_position : z64_tail_position + 4] == b"PK\x06\x06":
+                z64 = z64_tail_position
+                z64_count_this_disk = int.from_bytes(tail[z64 + 24 : z64 + 32], "little")
+                z64_total = int.from_bytes(tail[z64 + 32 : z64 + 40], "little")
+                z64_cd_size = int.from_bytes(tail[z64 + 40 : z64 + 48], "little")
+                z64_cd_offset = int.from_bytes(tail[z64 + 48 : z64 + 56], "little")
+                if z64_count_this_disk != 0xFFFF and z64_total != 0xFFFF:
+                    declared_entries = z64_total
+                if z64_cd_size != 0xFFFFFFFF and z64_cd_offset != 0xFFFFFFFF:
+                    cd_size = z64_cd_size  # the walk derives its start from cd_size + EOCD position
+
         if declared_entries > limits.max_members:
             raise PackageLimitError(
                 "member_count",
                 f"package declares {declared_entries} entries in its central directory; max_members={limits.max_members}",
             )
-        if cd_size == 0 or cd_offset >= size:
+        if cd_size == 0 or cd_size > size:
             return
+        # Derive the effective directory start the way zipfile's
+        # _EndRecData does: concat-adjust from the EOCD's own location.
+        effective_start = max(eocd_file_position - cd_size, 0)
         # Walk the real central-directory records: each header is at least 46
         # bytes and carries its own name/extra/comment lengths. The declared
         # count is never trusted — including a declared zero, which must not
         # skip the walk while ZipFile would still parse entries by size — so
-        # records are visited until one fails to parse or the member cap is
-        # exceeded, whichever comes first.
+        # records are visited until one fails to parse, the declared
+        # directory is exhausted, or the member cap is exceeded.
         walked = 0
         with open(path, "rb") as handle:
-            handle.seek(cd_offset)
-            while True:
+            handle.seek(effective_start)
+            while walked < declared_entries or declared_entries == 0:
                 header = handle.read(46)
                 if len(header) < 46 or header[:4] != b"PK\x01\x02":
                     break  # malformed/short directory: ZipFile will judge it

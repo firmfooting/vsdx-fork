@@ -147,17 +147,15 @@ def test_zero_declared_count_with_nonempty_directory_is_rejected(tmp_path):
 
 
 def test_eocd_preflight_reads_zip64_entry_count(tmp_path):
-    """A ZIP64 EOCD sentinel (0xFFFF) must fall through to the 8-byte count."""
+    """A ZIP64 locator/EOCD replaces classic values even without a sentinel count."""
     path = _copy("test1.vsdx", tmp_path)
-    limits = vsdx.PackageLimits(max_members=20)
-    VisioFile._preflight_eocd(path, limits)
-
     with open(path, "rb") as handle:
         payload = bytearray(handle.read())
     eocd = payload.rfind(b"PK\x05\x06")
-    # classic field holds the sentinel; append a ZIP64 EOCD declaring 40,000
-    payload[eocd + 10 : eocd + 12] = struct.pack("<H", 0xFFFF)
-    zip64_eocd = struct.pack(
+    real_cd_size = int.from_bytes(payload[eocd + 12 : eocd + 16], "little")
+    real_cd_offset = int.from_bytes(payload[eocd + 16 : eocd + 20], "little")
+    # real ZIP64 layout: ZIP64 EOCD, then locator pointing at it, then classic EOCD
+    z64_eocd = struct.pack(
         "<IQHHIIQQQQ",
         0x06064B50,  # signature
         44,  # size of remainder of this record
@@ -165,18 +163,23 @@ def test_eocd_preflight_reads_zip64_entry_count(tmp_path):
         45,  # version needed
         0,  # this disk
         0,  # directory start disk
-        14,  # entries on this disk (real fixture count)
-        40000,  # total entries: the lie the classic field hides
-        0,
-        0,
+        14,  # entries on this disk
+        40000,  # total entries: the lie
+        real_cd_size,
+        real_cd_offset,
     )
-    payload = zip64_eocd + payload
+    z64_offset = eocd  # ZIP64 EOCD placed at the classic EOCD's position
+    locator = struct.pack("<IIQH", 0x07064B50, 0, z64_offset, 1)
+    payload = payload[:eocd] + z64_eocd + locator + payload[eocd:]
+    new_eocd = payload.rfind(b"PK\x05\x06")
+    payload[new_eocd + 10 : new_eocd + 12] = struct.pack("<H", 0xFFFF)  # classic sentinel
+
     lying = os.path.join(str(tmp_path), "zip64-lying.vsdx")
     with open(lying, "wb") as handle:
         handle.write(payload)
 
     with pytest.raises(PackageLimitError) as excinfo:
-        VisioFile(lying, limits=limits)
+        VisioFile(lying, limits=vsdx.PackageLimits(max_members=20))
     assert excinfo.value.reason == "member_count"
     assert "40000" in str(excinfo.value)
 
