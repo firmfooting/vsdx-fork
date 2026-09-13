@@ -128,6 +128,7 @@ class VisioFileDiff:
                 digest = hashlib.sha256()
                 lines: list[str] = []
                 pending = ""
+                pending_cr = False  # a '\r' at chunk end may pair with '\n' next chunk
                 is_text = True
                 with zip_ref.open(member, "r") as stream:
                     while chunk := stream.read(VisioFileDiff._CHUNK):
@@ -135,14 +136,27 @@ class VisioFileDiff:
                         if not is_text:
                             continue
                         try:
-                            pending += decoder.decode(chunk)
+                            text = decoder.decode(chunk)
                         except UnicodeDecodeError:
                             is_text = False
                             continue
+                        if pending_cr:
+                            text = "\r" + text
+                            pending_cr = False
+                        if text.endswith("\r"):
+                            text = text[:-1]
+                            pending_cr = True  # decide CRLF-vs-CR only when the next chunk arrives
+                        pending += text
                         *complete, pending = pending.replace("\r\n", "\n").replace("\r", "\n").split("\n")
                         lines.extend(line + "\n" for line in complete)
                 if is_text:
-                    pending += decoder.decode(b"", final=True)
+                    try:
+                        pending += decoder.decode(b"", final=True)
+                    except UnicodeDecodeError:
+                        is_text = False  # incomplete multibyte sequence at EOF: binary, not text
+                if is_text:
+                    if pending_cr:
+                        pending += "\r"
                     if pending:
                         lines.append(pending)
                     file_contents[member.filename] = lines

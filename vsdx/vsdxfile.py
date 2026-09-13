@@ -283,6 +283,10 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         if position == -1:
             return  # not a zip / truncated: ZipFile will raise its own error
         declared_entries = int.from_bytes(tail[position + 10 : position + 12], "little")
+        if declared_entries == 0xFFFF:  # ZIP64 sentinel: real count lives in the ZIP64 EOCD
+            z64 = tail.rfind(b"PK\x06\x06")
+            if z64 != -1:
+                declared_entries = int.from_bytes(tail[z64 + 32 : z64 + 40], "little")
         if declared_entries > limits.max_members:
             raise PackageLimitError(
                 "member_count",
