@@ -1323,40 +1323,60 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
         """Whether this package declares the macro-enabled main document part."""
         return self._main_part_content_type() == MACRO_ENABLED_CONTENT_TYPE
 
-    def _destination_filename(self, new_filename: str) -> str:
-        """Resolve a save destination, refusing one that contradicts the package kind.
+    def _check_destination_kind(self, filename: str) -> str | None:
+        """Refuse a filename whose Visio extension contradicts the package kind.
 
         Renaming a .vsdm to .vsdx leaves `visio/vbaProject.bin` and the
         macro-enabled content type in place, and Visio reports the result as
         corrupt. Stripping the macros instead is a separate, larger job.
+
+        Returns the Visio extension the name already carries, or None when it
+        carries neither, so the caller can decide whether to append one.
         """
         macro_enabled = self.is_macro_enabled
         expected = ".vsdm" if macro_enabled else ".vsdx"
-        lowered = new_filename.lower()
+        lowered = filename.lower()
         # matched by ending, not splitext, so a name that is nothing but a
         # suffix keeps the historical behaviour of having one appended
         given = next((suffix for suffix in (".vsdm", ".vsdx") if lowered.endswith(suffix)), None)
-        if given == expected:
-            return new_filename
-        if given is not None:
-            if macro_enabled:
-                raise ValueError(
-                    f"cannot save a macro-enabled package as {new_filename!r}: it declares "
-                    f"{MACRO_ENABLED_CONTENT_TYPE} and still contains its vbaProject part, so it must keep the "
-                    ".vsdm extension"
-                )
+        if given is None or given == expected:
+            return given
+        if macro_enabled:
             raise ValueError(
-                f"cannot save {new_filename!r}: the .vsdm extension is for macro-enabled packages, and this "
-                f"package declares {self._main_part_content_type() or DRAWING_CONTENT_TYPE}"
+                f"cannot save a macro-enabled package as {filename!r}: it declares "
+                f"{MACRO_ENABLED_CONTENT_TYPE} and still contains its vbaProject part, so it must be saved "
+                "with a .vsdm extension"
             )
-        return new_filename + expected
+        raise ValueError(
+            f"cannot save {filename!r}: the .vsdm extension is for macro-enabled packages, and this "
+            f"package declares {self._main_part_content_type() or DRAWING_CONTENT_TYPE}"
+        )
+
+    def _destination_filename(self, new_filename: str) -> str:
+        """Resolve a named save destination, appending the matching extension if absent."""
+        if self._check_destination_kind(new_filename) is not None:
+            return new_filename
+        return new_filename + (".vsdm" if self.is_macro_enabled else ".vsdx")
+
+    def _in_place_filename(self) -> str:
+        """The source path, checked against the package kind but never renamed.
+
+        A save with no destination keeps the name it was opened under, so the
+        check can only refuse -- silently rewriting the caller's path would be
+        a worse surprise than the mismatch itself. The constructor already
+        rejects anything but a .vsdx or .vsdm name, so there is never a missing
+        extension to append here.
+        """
+        self._check_destination_kind(self.filename)
+        return self.filename
 
     def save_vsdx(self, new_filename: str | None = None) -> None:
         """save the VisioFile object as new vsdx file
 
         :param new_filename: path to save vsdx file. A `.vsdx` or `.vsdm`
             extension must match the package's own kind; any other name gets the
-            matching extension appended. Omit it to save over the source file.
+            matching extension appended. Omit it to save over the source file,
+            which is checked the same way but never renamed.
         :type new_filename: str
         :raises ValueError: if the extension contradicts the package kind
 
@@ -1368,7 +1388,7 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
 
         # resolve the destination before re-serialising anything, so a refused
         # extension leaves the in-memory package untouched
-        target = self.filename if new_filename is None else self._destination_filename(new_filename)
+        target = self._in_place_filename() if new_filename is None else self._destination_filename(new_filename)
 
         # write pages.xml.rels
         xml_to_file(

@@ -197,3 +197,21 @@ def test_macro_package_saves_in_place(vsdx_copy):
 
     assert Path(src).exists()
     assert _vba_bytes(src) == original
+
+
+def test_in_place_save_refuses_a_mismatched_source_name(vsdx_copy):
+    """A renamed .vsdm must not be written back out under its .vsdx name.
+
+    `save_vsdx()` with no argument is the commonest call, and skipping the
+    check there would let exactly the package this fix is about reach disk.
+    """
+    src = Path(vsdx_copy(MACRO_BASE))
+    renamed = src.with_name("renamed.vsdx")
+    src.rename(renamed)
+    before = renamed.read_bytes()
+
+    with VisioFile(str(renamed)) as vis:
+        with pytest.raises(ValueError, match="macro-enabled"):
+            vis.save_vsdx()
+
+    assert renamed.read_bytes() == before
