@@ -124,3 +124,76 @@ def test_new_named_save_preserves_source_mode(vsdx_copy):
         vis.save_vsdx(str(destination))
 
     assert destination.stat().st_mode & 0o777 == 0o640
+
+
+MACRO_BASE = "diagram_with_macro.vsdm"
+
+
+def _vba_bytes(path) -> bytes:
+    with zipfile.ZipFile(str(path)) as archive:
+        return archive.read("visio/vbaProject.bin")
+
+
+def test_macro_package_saves_to_vsdm(vsdx_copy):
+    src = vsdx_copy(MACRO_BASE)
+    destination = Path(src).with_name("out.vsdm")
+
+    with VisioFile(src) as vis:
+        vis.save_vsdx(str(destination))
+
+    assert destination.exists()
+    assert _vba_bytes(destination) == _vba_bytes(src)
+
+
+def test_macro_package_refuses_a_vsdx_destination(vsdx_copy):
+    src = vsdx_copy(MACRO_BASE)
+    destination = Path(src).with_name("out.vsdx")
+
+    with VisioFile(src) as vis:
+        with pytest.raises(ValueError, match="macro-enabled"):
+            vis.save_vsdx(str(destination))
+
+    assert not destination.exists()
+
+
+def test_drawing_package_refuses_a_vsdm_destination(vsdx_copy):
+    src = vsdx_copy(BASE)
+    destination = Path(src).with_name("out.vsdm")
+
+    with VisioFile(src) as vis:
+        with pytest.raises(ValueError, match="macro-enabled"):
+            vis.save_vsdx(str(destination))
+
+    assert not destination.exists()
+
+
+def test_macro_package_gets_the_vsdm_suffix_when_none_is_given(vsdx_copy):
+    src = vsdx_copy(MACRO_BASE)
+    destination = Path(src).with_name("suffixless")
+
+    with VisioFile(src) as vis:
+        vis.save_vsdx(str(destination))
+
+    assert destination.with_suffix(".vsdm").exists()
+    assert not destination.with_suffix(".vsdx").exists()
+
+
+def test_macro_package_accepts_an_uppercase_vsdm_suffix(vsdx_copy):
+    src = vsdx_copy(MACRO_BASE)
+    destination = Path(src).with_name("UPPER.VSDM")
+
+    with VisioFile(src) as vis:
+        vis.save_vsdx(str(destination))
+
+    assert destination.exists()
+
+
+def test_macro_package_saves_in_place(vsdx_copy):
+    src = vsdx_copy(MACRO_BASE)
+    original = _vba_bytes(src)
+
+    with VisioFile(src) as vis:
+        vis.save_vsdx()
+
+    assert Path(src).exists()
+    assert _vba_bytes(src) == original

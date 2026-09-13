@@ -62,6 +62,15 @@ def _normalise_page_path(path: str) -> str:
     return posixpath.normpath(path.replace("\\", "/"))
 
 
+# The main document part's content type, not the file extension, is what tells
+# a consumer whether a package carries macros. Visio reports a package whose
+# extension and content type disagree as corrupt, so the two must be kept in
+# step on save.
+MACRO_ENABLED_CONTENT_TYPE = "application/vnd.ms-visio.drawing.macroEnabled.main+xml"
+DRAWING_CONTENT_TYPE = "application/vnd.ms-visio.drawing.main+xml"
+_SUFFIX_BY_CONTENT_TYPE = {MACRO_ENABLED_CONTENT_TYPE: ".vsdm", DRAWING_CONTENT_TYPE: ".vsdx"}
+
+
 class PackageLimitError(OSError):
     """A package violated a load limit: size, member count, ratio, names or duplicates.
 
@@ -1294,17 +1303,72 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
     def close_vsdx(self) -> None:
         self.file_open = False
 
+    def _main_part_content_type(self) -> str:
+        """The declared content type of `/visio/document.xml`."""
+        content_types = self._part_root(self.content_types_xml, "[Content_Types].xml")
+        overrides = content_types.findall(f"{cont_types_namespace}Override")
+        for override in overrides:
+            if override.attrib.get("PartName") == "/visio/document.xml":
+                return override.attrib.get("ContentType", "")
+        # an unusual package may name the main part differently; fall back to
+        # whichever override declares a Visio main document content type
+        for override in overrides:
+            content_type = override.attrib.get("ContentType", "")
+            if content_type in _SUFFIX_BY_CONTENT_TYPE:
+                return content_type
+        return ""
+
+    @property
+    def is_macro_enabled(self) -> bool:
+        """Whether this package declares the macro-enabled main document part."""
+        return self._main_part_content_type() == MACRO_ENABLED_CONTENT_TYPE
+
+    def _destination_filename(self, new_filename: str) -> str:
+        """Resolve a save destination, refusing one that contradicts the package kind.
+
+        Renaming a .vsdm to .vsdx leaves `visio/vbaProject.bin` and the
+        macro-enabled content type in place, and Visio reports the result as
+        corrupt. Stripping the macros instead is a separate, larger job.
+        """
+        macro_enabled = self.is_macro_enabled
+        expected = ".vsdm" if macro_enabled else ".vsdx"
+        lowered = new_filename.lower()
+        # matched by ending, not splitext, so a name that is nothing but a
+        # suffix keeps the historical behaviour of having one appended
+        given = next((suffix for suffix in (".vsdm", ".vsdx") if lowered.endswith(suffix)), None)
+        if given == expected:
+            return new_filename
+        if given is not None:
+            if macro_enabled:
+                raise ValueError(
+                    f"cannot save a macro-enabled package as {new_filename!r}: it declares "
+                    f"{MACRO_ENABLED_CONTENT_TYPE} and still contains its vbaProject part, so it must keep the "
+                    ".vsdm extension"
+                )
+            raise ValueError(
+                f"cannot save {new_filename!r}: the .vsdm extension is for macro-enabled packages, and this "
+                f"package declares {self._main_part_content_type() or DRAWING_CONTENT_TYPE}"
+            )
+        return new_filename + expected
+
     def save_vsdx(self, new_filename: str | None = None) -> None:
         """save the VisioFile object as new vsdx file
 
-        :param new_filename: path to save vsdx file
+        :param new_filename: path to save vsdx file. A `.vsdx` or `.vsdm`
+            extension must match the package's own kind; any other name gets the
+            matching extension appended. Omit it to save over the source file.
         :type new_filename: str
+        :raises ValueError: if the extension contradicts the package kind
 
         """
         if not self.file_open:
             raise VisioFileNotOpen("Unable to save a file after being closed or outside of 'with' block.")
         if not self.zip_file_contents:
             raise ValueError("cannot save an empty package")
+
+        # resolve the destination before re-serialising anything, so a refused
+        # extension leaves the in-memory package untouched
+        target = self.filename if new_filename is None else self._destination_filename(new_filename)
 
         # write pages.xml.rels
         xml_to_file(
@@ -1349,7 +1413,4 @@ class VisioFile(MastersImportMixin, JinjaTemplatingMixin):
             self.zip_file_contents,
         )
 
-        target = self.filename if new_filename is None else new_filename
-        if new_filename is not None and not target.lower().endswith(".vsdx"):
-            target += ".vsdx"
         self._save_zip_file_contents_to_disk(target)
