@@ -46,6 +46,62 @@ responsive - but apologies in advance if I am not!
 Please add new tests for any new features you create, and keep the
 existing type-checking and formatting gates green.
 
+#### Cutting a release
+Releases are published to PyPI by `.github/workflows/publish.yml`, which is
+triggered by pushing a `v*` tag. No API tokens exist anywhere: PyPI authenticates
+the workflow through Trusted Publishing, matching the repository, the workflow
+**filename** and the `pypi` environment. Renaming that workflow file breaks
+publishing, and the failure reads like a permissions error rather than a naming
+one.
+
+Changelog entries follow [Keep a Changelog](https://keepachangelog.com):
+everything lands under `## Unreleased` in an `### Added`, `### Fixed` or
+`### Changed` subsection as it is merged, and the release moves that block into a
+dated `## <version> - <YYYY-MM-DD>` section. The GitHub Release body is generated
+from that same section, so there is only one place to write it.
+
+To cut a release:
+
+1. Bump `__version__` in `vsdx/__init__.py`.
+2. Rename `## Unreleased` in `CHANGELOG.md` to `## <version> - <YYYY-MM-DD>` and
+   open a fresh empty `## Unreleased` above it.
+3. Check both locally before tagging:
+
+   ```bash
+   uv run --no-sync python tools/check_version_tag.py "v<version>"
+   uv run --no-sync python tools/release_check.py "<version>" --print
+   ```
+
+   The first fails if the tag and `vsdx.__version__` disagree; the second fails
+   if the changelog has no section for the version, and `--print` shows exactly
+   what the GitHub Release will say. Both run again in the workflow before
+   anything is built or published.
+4. Open the release PR, let CI go green, and merge it.
+5. Tag the merge commit on `main` and push the tag:
+
+   ```bash
+   git tag -a "v<version>" -m "v<version>"
+   git push origin "v<version>"
+   ```
+
+6. Watch the **Publish** workflow. It verifies the tag and the changelog, runs
+   the test suite and the lint and type gates again — the CI workflow starts in
+   parallel on a tag push, so its result is not available to the publish job and
+   publishing is irreversible — then builds the sdist and wheel with `uv build`,
+   smoke-tests the wheel in a clean environment, publishes to PyPI with PEP 740
+   attestations, and creates the GitHub Release with the changelog section as its
+   body and the artefacts attached.
+7. Verify <https://pypi.org/project/vsdxkit/>: the new version is listed, the
+   files carry provenance attestations, and `pip install vsdxkit==<version>` into
+   a clean virtual environment imports and runs.
+
+A pre-release tag (`v0.8.0rc1`) is handled the same way and is marked as a
+pre-release on GitHub automatically. To rehearse without touching PyPI, run the
+workflow manually from the Actions tab: a manual run always goes to TestPyPI and
+never to PyPI, so the tag and changelog checks can never be skipped on the path
+that produces a real, uncorrectable release. Rehearsing needs its own pending
+publisher on TestPyPI and a `testpypi` environment on the repository.
+
 #### Upstream
 This repository is a fork and its history is periodically reconciled with
 upstream. If your change would also benefit the original project, consider

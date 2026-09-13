@@ -111,9 +111,9 @@ jobs:
       - name: Install lint and documentation tools
         run: uv sync --locked --no-default-groups --group lint --group docs
       - name: ruff check
-        run: uv run --no-sync ruff check vsdx tests
+        run: uv run --no-sync ruff check vsdx tests tools
       - name: ruff format
-        run: uv run --no-sync ruff format --check vsdx tests
+        run: uv run --no-sync ruff format --check vsdx tests tools
       - name: pyrefly strict
         run: uv run --no-sync pyrefly check vsdx --min-severity warn --output-format min-text
       - name: Verify action pin annotations
